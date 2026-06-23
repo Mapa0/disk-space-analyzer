@@ -42,6 +42,7 @@ def run_scan():
 def get_scans_info():
     data_dir = get_data_dir()
     info = {}
+    info["__data_dir__"] = os.path.abspath(data_dir)
     for filename, label in SCAN_FILES.items():
         filepath = os.path.join(data_dir, filename)
         if os.path.exists(filepath):
@@ -70,7 +71,8 @@ def get_scans_info():
                     "mtime": mtime,
                     "total_size": total_size,
                     "total_files": total_files,
-                    "total_folders": total_folders
+                    "total_folders": total_folders,
+                    "absolute_path": os.path.abspath(filepath)
                 }
             except Exception as e:
                 print(f"Error reading metadata from {filename}: {e}")

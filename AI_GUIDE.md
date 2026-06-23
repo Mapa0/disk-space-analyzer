@@ -217,18 +217,19 @@ Review the formatted analysis. Identify:
 Use PowerShell commands (see above) to investigate specific folders or find duplicates.
 
 ### 4. **Propose Cleanup Plan**
-Present a clear, categorized plan to the user:
-- **Safe to clean immediately** (caches, temp files)
-- **Requires confirmation** (old downloads, unused projects)
-- **Do not touch** (personal files, system files)
+Present a clear, two-stage plan to the user:
+- **Stage 1 (Safe to clean immediately)**: Propose and clear 100% safe items (application caches, temp files) first. Note that since these might only free a small amount of space (e.g. ~200MB), this is just the starting point.
+- **Stage 2 (Requires confirmation for large actions)**: List larger space-consuming targets (old downloads, unused node_modules, large virtual disks, unused software). You **MUST** request explicit confirmation for these large actions, explaining clearly what the space gains would be in GB/MB.
+- **Do not touch**: Personal files, database files, system files.
 
-Include estimated space savings for each category.
+Include estimated space savings for each action.
 
 ### 5. **Execute Cleanup**
 After user approval, run cleanup commands. Always:
-- Start with the safest items first
-- Show what will be deleted before deleting
-- Use `-WhatIf` flag first when possible
+- Start by executing Stage 1 (safe items) first.
+- For Stage 2, ask for confirmation before executing each major deletion.
+- Show what will be deleted before deleting.
+- Use `-WhatIf` flag first when possible.
 
 ### 6. **Verify & Re-scan**
 After cleanup, always run a fresh scan to verify results:
@@ -273,7 +274,7 @@ for path, size in sorted(large, key=lambda x: x[1], reverse=True):
 ## ⚡ Tips for the AI Agent
 
 1. **Always check scan freshness.** If `scan_info.timestamp` is more than a day old, suggest running a new scan.
-2. **Cache cleanup is the quickest win.** Start recommendations with cache cleanup — it's safe and often frees several GB.
+2. **Safe cleanups first, confirmation for large wins.** Start recommendations with safe cache/temp cleanups. Since cache cleanup is often small (~200MB), the real wins lie in larger items. Propose these larger wins next, but ALWAYS request explicit confirmation, detailing the exact gains in GB/MB.
 3. **Be specific with paths.** Always show the user the exact paths you're proposing to clean.
 4. **Estimate savings.** Calculate and present the total expected space savings before asking for confirmation.
 5. **Re-scan after cleanup.** Always run `DiskSpaceAnalyzer.exe scan --all` after any cleanup to update the dashboard and verify results.
