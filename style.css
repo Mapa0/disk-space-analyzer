@@ -919,3 +919,102 @@ select.btn-secondary option {
   pointer-events: none;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
 }
+
+/* Cache & Temp Files Panel Styling */
+.cache-panel {
+  width: 100%;
+}
+
+.cache-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1.2rem;
+}
+
+.cache-card {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-md);
+  padding: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 0.8rem;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(8px);
+}
+
+.cache-card:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(102, 252, 241, 0.2);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+}
+
+.cache-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.cache-title {
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--text-primary);
+}
+
+.cache-size {
+  font-weight: 700;
+  color: var(--accent);
+  font-family: monospace;
+  font-size: 1rem;
+  white-space: nowrap;
+}
+
+.cache-desc {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.cache-path-container {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(0, 0, 0, 0.25);
+  padding: 0.5rem 0.7rem;
+  border-radius: var(--radius-sm);
+  font-family: monospace;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.cache-path-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-grow: 1;
+}
+
+.cache-action-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s ease, transform 0.15s ease;
+  padding: 0.2rem;
+  border-radius: 4px;
+}
+
+.cache-action-btn:hover {
+  color: var(--accent);
+  background: rgba(255, 255, 255, 0.05);
+  transform: scale(1.05);
+}
+

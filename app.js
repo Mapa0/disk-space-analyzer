@@ -211,7 +211,27 @@ function showToast(message) {
   }
 }
 
-// Export dashboard data formatted as a markdown prompt for the agent
+// Helper to recursively traverse the tree and find the largest folders
+function getLargestFolders(rootNode, limit = 10) {
+  const folders = [];
+  
+  function traverse(node) {
+    if (!node) return;
+    if (node.is_dir) {
+      folders.push({ name: node.name, path: node.path, size: node.size });
+      if (node.children) {
+        node.children.forEach(child => traverse(child));
+      }
+    }
+  }
+  
+  traverse(rootNode);
+  folders.sort((a, b) => b.size - a.size);
+  // Skip the absolute root node which is index 0
+  return folders.slice(1, limit + 1);
+}
+
+// Export dashboard data formatted as an detailed, comprehensive markdown prompt for the agent
 function exportDataForAgent() {
   if (!scanData) {
     alert("No scan data loaded to export.");
@@ -219,43 +239,121 @@ function exportDataForAgent() {
   }
   
   const info = scanData.scan_info;
-  const topFiles = scanData.top_large_files.slice(0, 15);
-  const extensions = scanData.extension_stats.slice(0, 8);
+  const topFiles = scanData.top_large_files.slice(0, 20);
+  const extensions = scanData.extension_stats.slice(0, 10);
+  const topFolders = getLargestFolders(scanData.tree, 15);
+  const cacheSuggestions = scanData.cache_suggestions || [];
   
   let md = `Baseado no repositório do github https://github.com/Mapa0/disk-space-analyzer, preciso realizar uma limpeza de disco.\n\n`;
-  md += `O estado atual do drive/diretório analisado é:\n`;
-  md += `- **Caminho Escaneado:** \`${info.target_path}\`\n`;
-  md += `- **Tamanho Total:** ${formatBytes(info.total_size)}\n`;
-  md += `- **Total de Arquivos:** ${info.total_files.toLocaleString()}\n`;
-  md += `- **Total de Pastas:** ${info.total_folders.toLocaleString()}\n`;
-  md += `- **Data da Análise:** ${new Date(info.timestamp).toLocaleString()}\n\n`;
+  md += `Aqui está o detalhamento completo do estado atual do meu drive:\n\n`;
   
-  md += `### 📂 Maiores Arquivos Encontrados:\n`;
+  md += `### 📊 Informações Gerais:\n`;
+  md += `- **Diretório Raiz Escaneado:** \`${info.target_path}\`\n`;
+  md += `- **Tamanho Total:** ${formatBytes(info.total_size)}\n`;
+  md += `- **Total de Arquivos Escaneados:** ${info.total_files.toLocaleString()}\n`;
+  md += `- **Total de Pastas Escaneadas:** ${info.total_folders.toLocaleString()}\n`;
+  md += `- **Data da Varredura:** ${new Date(info.timestamp).toLocaleString()}\n\n`;
+  
+  md += `### 🧹 Caches e Arquivos Temporários Detectados:\n`;
+  if (cacheSuggestions.length > 0) {
+    cacheSuggestions.forEach(cache => {
+      const pathsText = cache.paths.map(p => `\`${p}\``).join(', ');
+      md += `- **${cache.name}**: ${formatBytes(cache.size)}  \n  *Caminhos:* ${pathsText}  \n  *Descrição:* ${cache.description}\n`;
+    });
+  } else {
+    md += `*Nenhum cache mapeado foi encontrado ou todos já foram limpos.*\n`;
+  }
+  md += `\n`;
+  
+  md += `### 📂 Maiores Pastas Encontradas (Top 15):\n`;
+  topFolders.forEach((f, idx) => {
+    md += `${idx + 1}. \`${f.path}\` (${formatBytes(f.size)})\n`;
+  });
+  md += `\n`;
+  
+  md += `### 📄 Maiores Arquivos Encontrados (Top 20):\n`;
   topFiles.forEach((f, idx) => {
     md += `${idx + 1}. \`${f.path}\` (${formatBytes(f.size)})\n`;
   });
   md += `\n`;
   
-  md += `### 📊 Principais Tipos de Arquivos:\n`;
+  md += `### 📊 Principais Extensões de Arquivos (Top 10):\n`;
   extensions.forEach(ext => {
     md += `- \`${ext.ext}\`: ${formatBytes(ext.size)}\n`;
   });
+  md += `\n`;
   
-  md += `\nPor favor, analise estes dados e me sugira o que pode ser limpo ou otimizado para liberar mais espaço.`;
+  md += `### 🤖 Instruções de Limpeza para o Agente de IA:\n`;
+  md += `1. **Análise de Risco**: Identifique quais itens (caches, arquivos ou pastas) podem ser limpos com 100% de segurança.\n`;
+  md += `2. **Estrutura de Atenção**: Destaque pastas pesadas que parecem ser de arquivos pessoais importantes ou dados de aplicativos vitais que requerem autorização.\n`;
+  md += `3. **Plano de Ação Automatizado**: Crie uma lista clara ou um script (preferencialmente em PowerShell para Windows) pronto para executar a remoção segura dos caches e arquivos identificados para liberar o máximo de espaço.\n`;
   
   // Copy to clipboard
   navigator.clipboard.writeText(md).then(() => {
-    showToast("Prompt copied to clipboard! Paste it in the agent chat.");
+    showToast("Prompt detalhado copiado! Cole na conversa com o agente.");
   }).catch(err => {
     // Fallback: download as file
     const blob = new Blob([md], { type: 'text/markdown' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'disk_analysis_for_agent.md';
+    a.download = 'disk_analysis_prompt.md';
     a.click();
     URL.revokeObjectURL(url);
-    showToast("Downloaded prompt file!");
+    showToast("Salvo como arquivo de prompt!");
+  });
+}
+
+// Render the Cache & Temporary Files suggestions panel
+function renderCacheSuggestions(cacheSuggestions) {
+  const grid = document.getElementById('cache-grid');
+  const panel = document.getElementById('cache-panel');
+  if (!grid || !panel) return;
+
+  grid.innerHTML = '';
+
+  if (!cacheSuggestions || cacheSuggestions.length === 0) {
+    panel.style.display = 'none'; // Hide panel if no caches
+    return;
+  }
+
+  panel.style.display = 'flex'; // Show panel
+
+  cacheSuggestions.forEach(cache => {
+    const card = document.createElement('div');
+    card.className = 'cache-card';
+    
+    const pathsJoined = cache.paths.join(', ');
+
+    card.innerHTML = `
+      <div class="cache-card-header">
+        <span class="cache-title">${cache.name}</span>
+        <span class="cache-size">${formatBytes(cache.size)}</span>
+      </div>
+      <p class="cache-desc">${cache.description}</p>
+      <div class="cache-path-container" title="Copy primary path: ${cache.paths[0]}">
+        <span class="cache-path-text">${cache.paths[0]} ${cache.paths.length > 1 ? `(+${cache.paths.length - 1} outros)` : ''}</span>
+        <button class="cache-action-btn btn-copy-cache-path" data-path="${cache.paths[0]}">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+            <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+          </svg>
+        </button>
+      </div>
+    `;
+
+    // Copy path hook
+    const copyBtn = card.querySelector('.btn-copy-cache-path');
+    copyBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const path = copyBtn.getAttribute('data-path');
+      navigator.clipboard.writeText(path.replace(/\\/g, '/')).then(() => {
+        showToast("Caminho do cache copiado!");
+      }).catch(err => {
+        console.error("Failed to copy cache path: ", err);
+      });
+    });
+
+    grid.appendChild(card);
   });
 }
 
@@ -290,6 +388,9 @@ function initializeDashboard(data) {
 
   // Load Top Large Files List
   renderLargeFilesList(data.top_large_files);
+  
+  // Render Cache & Temp Suggestions
+  renderCacheSuggestions(data.cache_suggestions);
 }
 
 // Helper to format bytes to human readable sizes
