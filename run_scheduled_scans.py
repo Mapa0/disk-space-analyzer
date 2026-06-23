@@ -18,15 +18,22 @@ SCANS = {
     "scan_results.json": os.path.expanduser("~") # Home User directory
 }
 
+def get_data_dir():
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.dirname(sys.executable)
+    else:
+        return os.path.dirname(os.path.abspath(__file__))
+
 def main():
     print("--- Starting Scheduled Disk Scans ---")
+    data_dir = get_data_dir()
     
     for filename, path in SCANS.items():
         if not os.path.exists(path):
             print(f"Path {path} does not exist. Skipping.")
             continue
             
-        output_path = os.path.join(current_dir, filename)
+        output_path = os.path.join(data_dir, filename)
         bak_path = output_path + ".bak"
         
         # 1. Rotate previous scan file to .bak for comparison
