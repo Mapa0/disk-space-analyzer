@@ -831,57 +831,120 @@ function calculateFolderExtensionStats(node) {
   return extensionsList;
 }
 
-// Global counter for node IDs
-let nodeIdCounter = 0;
-
-// Helper to count leaf nodes in tree
-function countLeaves(node) {
-  if (!node.children || node.children.length === 0) {
-    return 1;
-  }
-  return node.children.reduce((sum, child) => sum + countLeaves(child), 0);
-}
-
-// Global variables for vertical leaf layouts
-let leafCounter = 0;
-let numLeaves = 0;
-
-// Generate the collapsible folder tree hierarchy
+// Generate the collapsible folder tree hierarchy using Apache ECharts
 function renderFolderTree() {
-  const svg = document.getElementById('folder-tree-svg');
-  if (!svg) return;
-  svg.innerHTML = '';
+  const chartDom = document.getElementById('folder-tree-chart');
+  if (!chartDom) return;
 
   if (!currentFolderNode) return;
 
   // 1. Build a clean tree structure of folders with >= 1% weight
-  nodeIdCounter = 0;
+  let nodeIdCounter = 0;
   const treeData = buildTreeData(currentFolderNode, 0, 3);
   if (!treeData) {
-    svg.innerHTML = `<text x="50%" y="50%" text-anchor="middle" fill="var(--text-muted)">No directory data available for tree graph</text>`;
+    chartDom.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 2rem;">No directory data available for tree graph</div>`;
     return;
   }
 
-  // 2. Count total leaves to calculate horizontal spacing
-  numLeaves = countLeaves(treeData);
+  // 2. Initialize ECharts instance
+  let treeChart = echarts.getInstanceByDom(chartDom);
+  if (!treeChart) {
+    treeChart = echarts.init(chartDom);
+  }
 
-  // 3. Lay out the nodes using vertical bottom-up positioning
-  leafCounter = 0;
-  assignCoordinates(treeData, 0);
+  // 3. Define option configuration
+  const parentSize = currentFolderNode.size || 1;
+  const option = {
+    tooltip: {
+      trigger: 'item',
+      triggerOn: 'mousemove',
+      backgroundColor: 'rgba(11, 12, 16, 0.95)',
+      borderColor: 'rgba(255, 255, 255, 0.25)',
+      borderWidth: 1,
+      textStyle: {
+        color: '#ffffff',
+        fontFamily: 'Outfit, sans-serif',
+        fontSize: 12
+      },
+      formatter: (params) => {
+        return `<b>${params.data.name}</b><br/>Size: ${formatBytes(params.data.size)}<br/>Path: ${params.data.path}`;
+      }
+    },
+    series: [
+      {
+        type: 'tree',
+        data: [treeData],
+        orient: 'BT', // Bottom to Top vertical orientation
+        roam: true, // Enable panning and zooming
+        nodePadding: 25,
+        symbol: 'circle',
+        symbolSize: (value, params) => {
+          // Dynamic radius proportional to square root of folder size ratio
+          return Math.max(12, 12 + Math.sqrt(params.data.size / parentSize) * 36);
+        },
+        lineStyle: {
+          color: 'rgba(255, 255, 255, 0.3)',
+          width: 2,
+          curveness: 0.5
+        },
+        itemStyle: {
+          color: '#0b0c10',
+          borderColor: '#ffffff',
+          borderWidth: 2.5
+        },
+        label: {
+          position: 'right',
+          verticalAlign: 'middle',
+          align: 'left',
+          color: '#ffffff',
+          fontSize: 12,
+          fontFamily: 'Outfit, sans-serif',
+          fontWeight: 600,
+          distance: 10,
+          formatter: (params) => {
+            return `${params.name}\n(${formatBytes(params.data.size)})`;
+          },
+          lineHeight: 14
+        },
+        leaves: {
+          label: {
+            position: 'right',
+            verticalAlign: 'middle',
+            align: 'left'
+          }
+        },
+        emphasis: {
+          itemStyle: {
+            color: '#ffffff',
+            borderColor: '#ffffff',
+            shadowBlur: 10,
+            shadowColor: '#ffffff'
+          },
+          lineStyle: {
+            color: '#ffffff',
+            width: 4
+          }
+        },
+        expandAndCollapse: false, // Ensure nodes do not collapse on click (since click navigates)
+        initialTreeDepth: 3
+      }
+    ]
+  };
 
-  // Set fixed layout viewbox
-  svg.setAttribute('height', '450');
-  svg.setAttribute('viewBox', '0 0 900 450');
+  treeChart.setOption(option);
 
-  // Create a container group for rendering links and nodes
-  const mainGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-  svg.appendChild(mainGroup);
+  // 4. Set up click navigation
+  treeChart.off('click');
+  treeChart.on('click', (params) => {
+    if (params.data && params.data.nodeRef) {
+      navigateToFolder(params.data.nodeRef);
+    }
+  });
 
-  // Draw links first so they are placed behind the node circles
-  drawLinks(mainGroup, treeData);
-  
-  // Draw node circles and text labels
-  drawNodes(mainGroup, treeData);
+  // Resize listener
+  window.addEventListener('resize', () => {
+    treeChart.resize();
+  });
 }
 
 // Helper to compile directory sub-nodes recursively
@@ -889,14 +952,15 @@ function buildTreeData(node, depth, maxDepth) {
   if (!node || !node.is_dir || depth > maxDepth) return null;
   
   const treeNode = {
-    id: `node-${nodeIdCounter++}`,
     name: node.name,
     size: node.size,
     path: node.path,
     is_dir: true,
-    children: [],
-    nodeRef: node
+    children: []
   };
+  
+  // Save parent or node reference if needed
+  treeNode.nodeRef = node;
   
   if (node.children) {
     // Only process subfolders that consume at least 1% of this folder's size
@@ -905,7 +969,6 @@ function buildTreeData(node, depth, maxDepth) {
       if (child.is_dir && child.size >= threshold) {
         const childTree = buildTreeData(child, depth + 1, maxDepth);
         if (childTree) {
-          childTree.parent = treeNode; // Keep parent reference for hot path highlighting
           treeNode.children.push(childTree);
         }
       }
@@ -913,112 +976,4 @@ function buildTreeData(node, depth, maxDepth) {
   }
   
   return treeNode;
-}
-
-// Coordinate layout assignment for tree node positioning (Vertical Bottom-Up)
-function assignCoordinates(node, depth) {
-  node.depth = depth;
-  // Y coordinate: Root (depth 0) is at the bottom (400px), children branch upwards
-  node.y = 400 - depth * 110;
-  
-  if (node.children && node.children.length > 0) {
-    node.children.forEach(child => assignCoordinates(child, depth + 1));
-    // Center parent horizontally between first and last child midpoint
-    const firstChildX = node.children[0].x;
-    const lastChildX = node.children[node.children.length - 1].x;
-    node.x = (firstChildX + lastChildX) / 2;
-  } else {
-    // Assign sequential horizontal slot to leaf node
-    const spacingX = numLeaves > 1 ? 800 / (numLeaves - 1) : 400;
-    node.x = 50 + leafCounter * spacingX;
-    leafCounter++;
-  }
-}
-
-// Bezier path link coordinate helper (Vertical S-Curve)
-function drawBezierLink(x1, y1, x2, y2) {
-  const midY = (y1 + y2) / 2;
-  return `M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`;
-}
-
-// Draw links recursively in the SVG tree diagram
-function drawLinks(group, parentNode) {
-  if (!parentNode.children) return;
-  
-  parentNode.children.forEach(child => {
-    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    path.setAttribute('d', drawBezierLink(parentNode.x, parentNode.y, child.x, child.y));
-    path.setAttribute('class', 'tree-link');
-    path.setAttribute('id', `link-${parentNode.id}-${child.id}`);
-    group.appendChild(path);
-    
-    // Recurse children
-    drawLinks(group, child);
-  });
-}
-
-// Draw nodes recursively in the SVG tree diagram
-function drawNodes(group, node) {
-  const parentSize = currentFolderNode.size || 1;
-  // Node radius is proportional to the square root of size ratio (proportional circle area!)
-  const radius = 6 + Math.sqrt(node.size / parentSize) * 22;
-  
-  // Create group container for this node
-  const nodeG = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-  group.appendChild(nodeG);
-  
-  // Draw Circle
-  const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-  circle.setAttribute('cx', node.x.toString());
-  circle.setAttribute('cy', node.y.toString());
-  circle.setAttribute('r', radius.toString());
-  circle.setAttribute('class', 'tree-node-circle');
-  
-  // Tooltip
-  const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
-  title.textContent = `${node.name}\nSize: ${formatBytes(node.size)}`;
-  circle.appendChild(title);
-  
-  // Click handler to drill down into folder
-  circle.addEventListener('click', () => {
-    navigateToFolder(node.nodeRef);
-  });
-  
-  // Hover handler to highlight the "hot path" from root to current node
-  circle.addEventListener('mouseenter', () => {
-    let curr = node;
-    while (curr && curr.parent) {
-      const linkId = `link-${curr.parent.id}-${curr.id}`;
-      const link = document.getElementById(linkId);
-      if (link) link.classList.add('highlighted');
-      curr = curr.parent;
-    }
-  });
-  
-  circle.addEventListener('mouseleave', () => {
-    group.querySelectorAll('.tree-link').forEach(l => l.classList.remove('highlighted'));
-  });
-  
-  nodeG.appendChild(circle);
-  
-  // Name Label (drawn to the right of the circle, safe from link curves)
-  const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-  text.setAttribute('x', (node.x + radius + 8).toString());
-  text.setAttribute('y', (node.y + 2).toString());
-  text.setAttribute('class', 'tree-node-text');
-  text.textContent = node.name;
-  nodeG.appendChild(text);
-  
-  // Size Label (sub-caption)
-  const sizeText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-  sizeText.setAttribute('x', (node.x + radius + 8).toString());
-  sizeText.setAttribute('y', (node.y + 14).toString());
-  sizeText.setAttribute('class', 'tree-node-size');
-  sizeText.textContent = formatBytes(node.size);
-  nodeG.appendChild(sizeText);
-  
-  // Render children
-  if (node.children) {
-    node.children.forEach(child => drawNodes(group, child));
-  }
 }

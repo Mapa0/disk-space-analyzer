@@ -9,6 +9,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Include Apache ECharts library for premium, interactive vertical tree graphs -->
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
 </head>
 <body>
   <div class="glass-bg"></div>
@@ -168,10 +170,8 @@
           <h2>Folder Hierarchy Tree</h2>
           <span class="panel-subtitle">Visual tree map showing subfolder weights (click a node to drill down)</span>
         </div>
-        <div class="panel-body" style="background: rgba(0, 0, 0, 0.25); overflow-x: auto; display: flex; justify-content: center; align-items: center; padding: 1.5rem 1rem;">
-          <svg id="folder-tree-svg" width="100%" height="450" style="min-width: 800px; display: block; overflow: visible;">
-            <!-- Dynamic links and nodes generated here -->
-          </svg>
+        <div class="panel-body" style="background: rgba(0, 0, 0, 0.25); overflow-x: auto; padding: 1.5rem 1rem;">
+          <div id="folder-tree-chart" style="width: 100%; height: 500px; min-width: 800px;"></div>
         </div>
       </section>
     </main>
