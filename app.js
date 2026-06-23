@@ -46,6 +46,63 @@ function setupEventListeners() {
   // Search input
   const searchInput = document.getElementById('search-input');
   searchInput.addEventListener('input', handleSearch);
+
+  // Run Scan button
+  const btnRunScan = document.getElementById('btn-run-scan');
+  if (btnRunScan) {
+    btnRunScan.addEventListener('click', startScanFlow);
+  }
+}
+
+// Start scan flow
+async function startScanFlow() {
+  const overlay = document.getElementById('scanning-overlay');
+  const btn = document.getElementById('btn-run-scan');
+  
+  if (btn) btn.disabled = true;
+  if (overlay) overlay.classList.remove('hidden');
+  
+  try {
+    const res = await fetch('/api/scan', { method: 'POST' });
+    if (res.ok) {
+      // Poll status
+      pollScanStatus();
+    } else {
+      const err = await res.json();
+      alert(`Error starting scan: ${err.message || 'Unknown error'}`);
+      if (btn) btn.disabled = false;
+      if (overlay) overlay.classList.add('hidden');
+    }
+  } catch (err) {
+    alert(`Failed to trigger scan: ${err.message}`);
+    if (btn) btn.disabled = false;
+    if (overlay) overlay.classList.add('hidden');
+  }
+}
+
+// Poll scan status
+function pollScanStatus() {
+  const overlay = document.getElementById('scanning-overlay');
+  const btn = document.getElementById('btn-run-scan');
+  
+  const interval = setInterval(async () => {
+    try {
+      const res = await fetch('/api/scan/status');
+      if (res.ok) {
+        const status = await res.json();
+        if (!status.scanning) {
+          clearInterval(interval);
+          if (overlay) overlay.classList.add('hidden');
+          if (btn) btn.disabled = false;
+          // Reload scans info and load the latest scan
+          await loadDefaultData();
+          showToast("Scan completed and data updated!");
+        }
+      }
+    } catch (err) {
+      console.error("Error polling scan status:", err);
+    }
+  }, 2000);
 }
 
 // Load a specific scan JSON file from dropdown
@@ -71,8 +128,38 @@ async function loadScanData(fileName) {
   }
 }
 
-// Try to auto-load scan_results.json
+// Try to auto-load scans and auto-select latest scan
 async function loadDefaultData() {
+  try {
+    // 1. Try to load scans metadata from custom server API
+    const infoRes = await fetch('/api/scans/info');
+    if (infoRes.ok) {
+      const scansInfo = await infoRes.json();
+      let latestFile = null;
+      let latestMtime = 0;
+      
+      for (const [filename, meta] of Object.entries(scansInfo)) {
+        if (meta.mtime > latestMtime) {
+          latestMtime = meta.mtime;
+          latestFile = filename;
+        }
+      }
+      
+      if (latestFile) {
+        console.log(`Auto-selecting latest scan: ${latestFile}`);
+        const driveSelect = document.getElementById('drive-select');
+        if (driveSelect) {
+          driveSelect.value = latestFile;
+        }
+        await loadScanData(latestFile);
+        return;
+      }
+    }
+  } catch (error) {
+    console.log("Could not fetch scans info from server API, falling back to static scan_results.json");
+  }
+  
+  // Fallback to static scan_results.json
   try {
     const response = await fetch('scan_results.json');
     if (response.ok) {
@@ -81,6 +168,18 @@ async function loadDefaultData() {
     }
   } catch (error) {
     console.log("Could not auto-load scan_results.json (this is normal if running via file:// protocol). Please upload the file manually using the button.");
+  }
+}
+
+// Show a simple toast notification
+function showToast(message) {
+  const toast = document.getElementById('toast');
+  if (toast) {
+    toast.textContent = message;
+    toast.classList.add('show');
+    setTimeout(() => {
+      toast.classList.remove('show');
+    }, 3000);
   }
 }
 

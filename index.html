@@ -35,8 +35,14 @@
           <option value="E_drive_results.json">Drive E:\</option>
           <option value="F_drive_results.json">Drive F:\</option>
         </select>
+        <button id="btn-run-scan" class="btn btn-primary">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="margin-right: 6px;">
+            <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+          </svg>
+          Run Scan
+        </button>
         <label for="json-upload" class="btn btn-secondary">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="margin-right: 6px;">
             <path d="M9 16h6v-6h4l-7-7-7 7h4v6zm-4 2h14v2H5v-2z"/>
           </svg>
           Load Custom JSON
@@ -156,5 +162,17 @@
 
   <!-- Toast notification for copy paths -->
   <div class="toast" id="toast">Path copied to clipboard!</div>
+
+  <!-- Scanning Overlay -->
+  <div id="scanning-overlay" class="overlay hidden">
+    <div class="overlay-content">
+      <div class="spinner"></div>
+      <h2>Scanning System Drives...</h2>
+      <p>This may take up to a minute. Please wait while we update all drive reports.</p>
+    </div>
+  </div>
+
+  <!-- Include custom app script -->
+  <script src="app.js"></script>
 </body>
 </html>
