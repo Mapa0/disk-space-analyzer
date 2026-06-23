@@ -42,6 +42,12 @@ function setupEventListeners() {
   const btnBack = document.getElementById('btn-back');
   btnBack.addEventListener('click', navigateUp);
 
+  // Tree Back button
+  const btnTreeBack = document.getElementById('btn-tree-back');
+  if (btnTreeBack) {
+    btnTreeBack.addEventListener('click', navigateUp);
+  }
+
   // Table sorting
   document.getElementById('sort-name').addEventListener('click', () => toggleSort('name'));
   document.getElementById('sort-size').addEventListener('click', () => toggleSort('size'));
@@ -340,9 +346,10 @@ function navigateToAncestor(index) {
   renderFolderExplorer();
 }
 
-// Build breadcrumbs path representation
-function renderBreadcrumbs() {
-  const container = document.getElementById('breadcrumbs');
+// Helper to render breadcrumbs for a specific container and back button
+function renderBreadcrumbsForContainer(containerId, backButtonId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
   container.innerHTML = '';
 
   // Root drive/path representation
@@ -358,13 +365,11 @@ function renderBreadcrumbs() {
 
   // Append history paths
   navigationHistory.forEach((node, idx) => {
-    // separator
     const sep = document.createElement('span');
     sep.className = 'breadcrumb-separator';
     sep.textContent = '>';
     container.appendChild(sep);
 
-    // item
     const item = document.createElement('span');
     item.className = 'breadcrumb-item';
     item.textContent = node.name;
@@ -386,7 +391,16 @@ function renderBreadcrumbs() {
   }
 
   // Update back button status
-  document.getElementById('btn-back').disabled = (navigationHistory.length === 0);
+  const backBtn = document.getElementById(backButtonId);
+  if (backBtn) {
+    backBtn.disabled = (navigationHistory.length === 0);
+  }
+}
+
+// Build breadcrumbs path representation
+function renderBreadcrumbs() {
+  renderBreadcrumbsForContainer('breadcrumbs', 'btn-back');
+  renderBreadcrumbsForContainer('tree-breadcrumbs', 'btn-tree-back');
 }
 
 // Helper to get file extension in lowercase (returns 'no_ext' if none)
@@ -876,7 +890,11 @@ function renderFolderTree() {
         data: [treeData],
         orient: 'BT', // Bottom to Top vertical orientation
         roam: true, // Enable panning and zooming
-        nodePadding: 25,
+        top: '18%', // Margins to avoid labels clipping at top/bottom/sides
+        bottom: '8%',
+        left: '12%',
+        right: '12%',
+        nodePadding: 45, // Spacing between sibling nodes
         symbol: 'circle',
         symbolSize: (value, params) => {
           // Dynamic radius proportional to square root of folder size ratio
@@ -908,9 +926,10 @@ function renderFolderTree() {
         },
         leaves: {
           label: {
-            position: 'right',
-            verticalAlign: 'middle',
-            align: 'left'
+            position: 'top', // Labels for leaf nodes at the top sit above the node to avoid overlapping horizontally
+            verticalAlign: 'bottom',
+            align: 'center',
+            distance: 8
           }
         },
         emphasis: {
