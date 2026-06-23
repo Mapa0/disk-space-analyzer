@@ -308,9 +308,6 @@ function navigateToFolder(folderNode) {
   activeExtensionFilter = null;
   
   renderFolderExplorer();
-  if (scanData) {
-    renderExtensionChart(scanData.extension_stats);
-  }
 }
 
 // Navigate up to parent folder
@@ -323,9 +320,6 @@ function navigateUp() {
   activeExtensionFilter = null;
   
   renderFolderExplorer();
-  if (scanData) {
-    renderExtensionChart(scanData.extension_stats);
-  }
 }
 
 // Navigate directly to a specific ancestor path in history
@@ -344,9 +338,6 @@ function navigateToAncestor(index) {
   activeExtensionFilter = null;
   
   renderFolderExplorer();
-  if (scanData) {
-    renderExtensionChart(scanData.extension_stats);
-  }
 }
 
 // Build breadcrumbs path representation
@@ -579,6 +570,20 @@ function toggleSort(field) {
 }
 
 // Render dynamic custom SVG donut chart & legend
+// Helper to draw a circular arc for donut chart slice
+function describeArc(cx, cy, r, startAngle, endAngle) {
+  const startX = cx + r * Math.cos(startAngle);
+  const startY = cy + r * Math.sin(startAngle);
+  const endX = cx + r * Math.cos(endAngle);
+  const endY = cy + r * Math.sin(endAngle);
+  
+  const angleDiff = endAngle - startAngle;
+  const largeArcFlag = angleDiff > Math.PI ? 1 : 0;
+  
+  return `M ${startX} ${startY} A ${r} ${r} 0 ${largeArcFlag} 1 ${endX} ${endY}`;
+}
+
+// Render dynamic custom SVG donut chart & legend
 function renderExtensionChart(extensionStats) {
   const svg = document.getElementById('extension-chart');
   const legendContainer = document.getElementById('chart-legend');
@@ -598,22 +603,28 @@ function renderExtensionChart(extensionStats) {
   if (totalExtSize === 0) return;
 
   const radius = 60;
-  const circumference = 2 * Math.PI * radius; // ~376.99
-  let accumulatedSize = 0;
+  let accumulatedAngle = 0; // Starts at 3 o'clock (0 radians)
 
   extensionStats.forEach((item, index) => {
     const color = EXTENSION_COLORS[index % EXTENSION_COLORS.length];
     const percent = (item.size / totalExtSize) * 100;
     
-    // Draw SVG circle slice if percentage is significant
+    // Draw SVG arc path slice if percentage is significant
     if (percent > 0.1) {
-      const circleSlice = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-      circleSlice.setAttribute('cx', '100');
-      circleSlice.setAttribute('cy', '100');
-      circleSlice.setAttribute('r', radius.toString());
-      circleSlice.setAttribute('fill', 'transparent');
-      circleSlice.setAttribute('stroke', color);
-      circleSlice.setAttribute('stroke-width', '20');
+      let segmentAngle = (item.size / totalExtSize) * 2 * Math.PI;
+      // Special case: if segment is 100%, leave a tiny gap so startX and endX do not overlap
+      if (segmentAngle >= 2 * Math.PI) {
+        segmentAngle = 2 * Math.PI - 0.001;
+      }
+      
+      const startAngle = accumulatedAngle;
+      const endAngle = startAngle + segmentAngle;
+      
+      const pathSlice = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      pathSlice.setAttribute('d', describeArc(100, 100, radius, startAngle, endAngle));
+      pathSlice.setAttribute('fill', 'none');
+      pathSlice.setAttribute('stroke', color);
+      pathSlice.setAttribute('stroke-width', '20');
       
       // Use standard class assignment for SVG
       let cssClass = 'donut-segment';
@@ -624,21 +635,15 @@ function renderExtensionChart(extensionStats) {
           cssClass += ' dimmed';
         }
       }
-      circleSlice.setAttribute('class', cssClass);
-
-      // Dash offset and size (standard SVG circle chart method)
-      const dashSize = (item.size / totalExtSize) * circumference;
-      const gapSize = circumference - dashSize;
-      circleSlice.setAttribute('stroke-dasharray', `${dashSize} ${gapSize}`);
-      circleSlice.setAttribute('stroke-dashoffset', (-accumulatedSize).toString());
+      pathSlice.setAttribute('class', cssClass);
       
       // Hover tooltip effect
       const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
       title.textContent = `${item.ext}: ${formatBytes(item.size)} (${percent.toFixed(1)}%)`;
-      circleSlice.appendChild(title);
+      pathSlice.appendChild(title);
 
       // Interactive Hover Center Text updates
-      circleSlice.addEventListener('mouseenter', () => {
+      pathSlice.addEventListener('mouseenter', () => {
         const centerTitle = document.getElementById('donut-center-title');
         const centerSize = document.getElementById('donut-center-size');
         if (centerTitle && centerSize) {
@@ -648,7 +653,7 @@ function renderExtensionChart(extensionStats) {
         }
       });
       
-      circleSlice.addEventListener('mouseleave', () => {
+      pathSlice.addEventListener('mouseleave', () => {
         const centerTitle = document.getElementById('donut-center-title');
         const centerSize = document.getElementById('donut-center-size');
         if (centerTitle && centerSize) {
@@ -659,11 +664,11 @@ function renderExtensionChart(extensionStats) {
       });
 
       // Filter click handler
-      circleSlice.addEventListener('click', () => toggleExtensionFilter(item.ext));
+      pathSlice.addEventListener('click', () => toggleExtensionFilter(item.ext));
 
-      svg.appendChild(circleSlice);
+      svg.appendChild(pathSlice);
       
-      accumulatedSize += dashSize;
+      accumulatedAngle += segmentAngle;
     }
 
     // Build Legend item
@@ -738,7 +743,6 @@ function toggleExtensionFilter(ext) {
   
   // Re-render components to show filtering states
   renderFolderExplorer();
-  renderExtensionChart(scanData.extension_stats);
 }
 
 // Render Top Files table
@@ -827,6 +831,9 @@ function calculateFolderExtensionStats(node) {
   return extensionsList;
 }
 
+// Global counter for node IDs
+let nodeIdCounter = 0;
+
 // Generate the collapsible folder tree hierarchy
 function renderFolderTree() {
   const svg = document.getElementById('folder-tree-svg');
@@ -836,6 +843,7 @@ function renderFolderTree() {
   if (!currentFolderNode) return;
 
   // 1. Build a clean tree structure of folders with >= 1% weight
+  nodeIdCounter = 0;
   const treeData = buildTreeData(currentFolderNode, 0, 3);
   if (!treeData) {
     svg.innerHTML = `<text x="50%" y="50%" text-anchor="middle" fill="var(--text-muted)">No directory data available for tree graph</text>`;
@@ -867,6 +875,7 @@ function buildTreeData(node, depth, maxDepth) {
   if (!node || !node.is_dir || depth > maxDepth) return null;
   
   const treeNode = {
+    id: `node-${nodeIdCounter++}`,
     name: node.name,
     size: node.size,
     path: node.path,
@@ -882,6 +891,7 @@ function buildTreeData(node, depth, maxDepth) {
       if (child.is_dir && child.size >= threshold) {
         const childTree = buildTreeData(child, depth + 1, maxDepth);
         if (childTree) {
+          childTree.parent = treeNode; // Keep parent reference for hot path highlighting
           treeNode.children.push(childTree);
         }
       }
@@ -926,7 +936,7 @@ function drawLinks(group, parentNode) {
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     path.setAttribute('d', drawBezierLink(parentNode.x, parentNode.y, child.x, child.y));
     path.setAttribute('class', 'tree-link');
-    path.setAttribute('id', `link-${parentNode.name}-${child.name}`.replace(/\s+/g, '-'));
+    path.setAttribute('id', `link-${parentNode.id}-${child.id}`);
     group.appendChild(path);
     
     // Recurse children
@@ -961,19 +971,18 @@ function drawNodes(group, node) {
     navigateToFolder(node.nodeRef);
   });
   
-  // Hover handler to highlight path link
+  // Hover handler to highlight the "hot path" from root to current node
   circle.addEventListener('mouseenter', () => {
-    // Highlight parent connection link
-    if (node.children) {
-      node.children.forEach(child => {
-        const link = document.getElementById(`link-${node.name}-${child.name}`.replace(/\s+/g, '-'));
-        if (link) link.classList.add('highlighted');
-      });
+    let curr = node;
+    while (curr && curr.parent) {
+      const linkId = `link-${curr.parent.id}-${curr.id}`;
+      const link = document.getElementById(linkId);
+      if (link) link.classList.add('highlighted');
+      curr = curr.parent;
     }
   });
   
   circle.addEventListener('mouseleave', () => {
-    const links = group.querySelectorAll('.tree-link');
     group.querySelectorAll('.tree-link').forEach(l => l.classList.remove('highlighted'));
   });
   
