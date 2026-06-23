@@ -29,7 +29,7 @@
       <div class="header-actions">
         <select id="drive-select" class="btn btn-secondary">
           <option value="" disabled>Select Scan</option>
-          <option value="scan_results.json" selected>Home User (C:\Users\admin)</option>
+          <option value="scan_results.json" selected>Home User</option>
           <option value="C_drive_results.json">Drive C:\</option>
           <option value="D_drive_results.json">Drive D:\</option>
           <option value="E_drive_results.json">Drive E:\</option>
@@ -41,13 +41,12 @@
           </svg>
           Run Scan
         </button>
-        <label for="json-upload" class="btn btn-secondary">
+        <button id="btn-export-agent" class="btn btn-secondary">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="margin-right: 6px;">
-            <path d="M9 16h6v-6h4l-7-7-7 7h4v6zm-4 2h14v2H5v-2z"/>
+            <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
           </svg>
-          Load Custom JSON
-        </label>
-        <input type="file" id="json-upload" accept=".json" style="display: none;">
+          Export for Agent
+        </button>
       </div>
     </header>
 

@@ -586,15 +586,21 @@ select.btn-secondary option {
 /* Donut Chart visual */
 .chart-container {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
+  justify-content: space-between;
   gap: 1.5rem;
 }
 
 .donut-chart-wrapper {
   position: relative;
-  width: 180px;
-  height: 180px;
+  width: 150px;
+  height: 150px;
+  flex-shrink: 0;
+}
+
+#extension-chart {
+  transform: rotate(-90deg);
 }
 
 .donut-center {
@@ -615,17 +621,39 @@ select.btn-secondary option {
 
 /* Legend styling */
 .chart-legend {
-  width: 100%;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.6rem 1rem;
-  font-size: 0.8rem;
+  flex-grow: 1;
+  max-height: 160px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding-right: 0.5rem;
+  font-size: 0.85rem;
 }
 
 .legend-item {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.6rem;
+  padding: 0.3rem 0.5rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.legend-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.legend-item.filtered {
+  background: rgba(102, 252, 241, 0.12);
+  border-color: var(--accent);
+}
+
+.legend-item.dimmed {
+  opacity: 0.35;
 }
 
 .legend-color {
@@ -645,18 +673,27 @@ select.btn-secondary option {
 .legend-val {
   color: var(--text-muted);
   margin-left: auto;
+  font-family: monospace;
 }
 
 /* SVG ring details */
 .donut-segment {
   transform-origin: center;
-  transition: stroke-width 0.2s ease, filter 0.2s ease;
+  transition: stroke-width 0.2s ease, filter 0.2s ease, opacity 0.2s ease;
   cursor: pointer;
 }
 
 .donut-segment:hover {
-  stroke-width: 28;
+  stroke-width: 25;
   filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.15));
+}
+
+.donut-segment.filtered {
+  stroke-width: 25;
+}
+
+.donut-segment.dimmed {
+  opacity: 0.35;
 }
 
 /* Scroll List (Top files) */

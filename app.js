@@ -4,6 +4,7 @@ let currentFolderNode = null;
 let navigationHistory = [];
 let sortField = 'size'; // 'name' or 'size'
 let sortDirection = 'desc'; // 'asc' or 'desc'
+let activeExtensionFilter = null; // Filter current folder files by extension
 
 // Colors for the extension chart (10 premium dark-mode matching colors)
 const EXTENSION_COLORS = [
@@ -31,9 +32,11 @@ function setupEventListeners() {
   const driveSelect = document.getElementById('drive-select');
   driveSelect.addEventListener('change', handleDriveSelect);
 
-  // JSON upload file reader
-  const jsonUpload = document.getElementById('json-upload');
-  jsonUpload.addEventListener('change', handleJsonUpload);
+  // Export for Agent button
+  const btnExportAgent = document.getElementById('btn-export-agent');
+  if (btnExportAgent) {
+    btnExportAgent.addEventListener('click', exportDataForAgent);
+  }
 
   // Back button
   const btnBack = document.getElementById('btn-back');
@@ -135,6 +138,26 @@ async function loadDefaultData() {
     const infoRes = await fetch('/api/scans/info');
     if (infoRes.ok) {
       const scansInfo = await infoRes.json();
+      
+      // Update options in drive-select dropdown dynamically!
+      const driveSelect = document.getElementById('drive-select');
+      if (driveSelect && Object.keys(scansInfo).length > 0) {
+        // Keep only the default disabled option
+        driveSelect.innerHTML = '<option value="" disabled>Select Scan</option>';
+        
+        for (const [filename, meta] of Object.entries(scansInfo)) {
+          const opt = document.createElement('option');
+          opt.value = filename;
+          
+          let displayLabel = meta.label;
+          if (meta.target_path) {
+            displayLabel += ` (${meta.target_path})`;
+          }
+          opt.textContent = displayLabel;
+          driveSelect.appendChild(opt);
+        }
+      }
+      
       let latestFile = null;
       let latestMtime = 0;
       
@@ -147,7 +170,6 @@ async function loadDefaultData() {
       
       if (latestFile) {
         console.log(`Auto-selecting latest scan: ${latestFile}`);
-        const driveSelect = document.getElementById('drive-select');
         if (driveSelect) {
           driveSelect.value = latestFile;
         }
@@ -167,7 +189,7 @@ async function loadDefaultData() {
       initializeDashboard(data);
     }
   } catch (error) {
-    console.log("Could not auto-load scan_results.json (this is normal if running via file:// protocol). Please upload the file manually using the button.");
+    console.log("Could not auto-load scan_results.json. Please ensure a scan has been run first.");
   }
 }
 
@@ -183,24 +205,52 @@ function showToast(message) {
   }
 }
 
-// Handle local file uploads
-function handleJsonUpload(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    try {
-      const data = JSON.parse(e.target.result);
-      // Reset dropdown select
-      document.getElementById('drive-select').value = '';
-      initializeDashboard(data);
-    } catch (err) {
-      alert("Error parsing JSON file. Please make sure it is a valid scanner output file.");
-      console.error(err);
-    }
-  };
-  reader.readAsText(file);
+// Export dashboard data formatted as a markdown prompt for the agent
+function exportDataForAgent() {
+  if (!scanData) {
+    alert("No scan data loaded to export.");
+    return;
+  }
+  
+  const info = scanData.scan_info;
+  const topFiles = scanData.top_large_files.slice(0, 15);
+  const extensions = scanData.extension_stats.slice(0, 8);
+  
+  let md = `Baseado no repositório do github https://github.com/Mapa0/disk-space-analyzer, preciso realizar uma limpeza de disco.\n\n`;
+  md += `O estado atual do drive/diretório analisado é:\n`;
+  md += `- **Caminho Escaneado:** \`${info.target_path}\`\n`;
+  md += `- **Tamanho Total:** ${formatBytes(info.total_size)}\n`;
+  md += `- **Total de Arquivos:** ${info.total_files.toLocaleString()}\n`;
+  md += `- **Total de Pastas:** ${info.total_folders.toLocaleString()}\n`;
+  md += `- **Data da Análise:** ${new Date(info.timestamp).toLocaleString()}\n\n`;
+  
+  md += `### 📂 Maiores Arquivos Encontrados:\n`;
+  topFiles.forEach((f, idx) => {
+    md += `${idx + 1}. \`${f.path}\` (${formatBytes(f.size)})\n`;
+  });
+  md += `\n`;
+  
+  md += `### 📊 Principais Tipos de Arquivos:\n`;
+  extensions.forEach(ext => {
+    md += `- \`${ext.ext}\`: ${formatBytes(ext.size)}\n`;
+  });
+  
+  md += `\nPor favor, analise estes dados e me sugira o que pode ser limpo ou otimizado para liberar mais espaço.`;
+  
+  // Copy to clipboard
+  navigator.clipboard.writeText(md).then(() => {
+    showToast("Prompt copied to clipboard! Paste it in the agent chat.");
+  }).catch(err => {
+    // Fallback: download as file
+    const blob = new Blob([md], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'disk_analysis_for_agent.md';
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast("Downloaded prompt file!");
+  });
 }
 
 // Initialize dashboard with scan data
@@ -213,6 +263,7 @@ function initializeDashboard(data) {
   scanData = data;
   currentFolderNode = data.tree;
   navigationHistory = [];
+  activeExtensionFilter = null; // Reset filter on new scan load
 
   // Update Header Metadata
   const dateStr = new Date(data.scan_info.timestamp).toLocaleString();
@@ -255,10 +306,14 @@ function navigateToFolder(folderNode) {
   navigationHistory.push(currentFolderNode);
   currentFolderNode = folderNode;
   
-  // Clear search input on folder change
+  // Clear search input and extension filter on folder change
   document.getElementById('search-input').value = '';
+  activeExtensionFilter = null;
   
   renderFolderExplorer();
+  if (scanData) {
+    renderExtensionChart(scanData.extension_stats);
+  }
 }
 
 // Navigate up to parent folder
@@ -266,10 +321,14 @@ function navigateUp() {
   if (navigationHistory.length === 0) return;
   currentFolderNode = navigationHistory.pop();
   
-  // Clear search input on folder change
+  // Clear search input and extension filter on folder change
   document.getElementById('search-input').value = '';
+  activeExtensionFilter = null;
   
   renderFolderExplorer();
+  if (scanData) {
+    renderExtensionChart(scanData.extension_stats);
+  }
 }
 
 // Navigate directly to a specific ancestor path in history
@@ -283,10 +342,14 @@ function navigateToAncestor(index) {
   navigationHistory = navigationHistory.slice(0, index);
   currentFolderNode = targetNode;
   
-  // Clear search input on folder change
+  // Clear search input and extension filter on folder change
   document.getElementById('search-input').value = '';
+  activeExtensionFilter = null;
   
   renderFolderExplorer();
+  if (scanData) {
+    renderExtensionChart(scanData.extension_stats);
+  }
 }
 
 // Build breadcrumbs path representation
@@ -338,11 +401,27 @@ function renderBreadcrumbs() {
   document.getElementById('btn-back').disabled = (navigationHistory.length === 0);
 }
 
+// Helper to get file extension in lowercase (returns 'no_ext' if none)
+function getFileExtension(filename) {
+  const idx = filename.lastIndexOf('.');
+  if (idx === -1 || idx === 0) return 'no_ext';
+  return filename.substring(idx).toLowerCase();
+}
+
 // Sort active children based on state
 function getSortedChildren(node, filterQuery = '') {
   if (!node || !node.children) return [];
 
   let items = [...node.children];
+
+  // Apply extension filter first if active
+  if (activeExtensionFilter) {
+    items = items.filter(item => {
+      if (item.is_dir) return false; // Hide directories when filtering by file type
+      const ext = getFileExtension(item.name);
+      return ext === activeExtensionFilter;
+    });
+  }
 
   // Apply search query filter if exists
   if (filterQuery) {
@@ -500,10 +579,10 @@ function renderExtensionChart(extensionStats) {
   const svg = document.getElementById('extension-chart');
   const legendContainer = document.getElementById('chart-legend');
   
-  // Clear previous children except background circle
-  while (svg.childNodes.length > 2) {
-    svg.removeChild(svg.lastChild);
-  }
+  // Clear previous donut segments using class selector to keep background circle intact!
+  const oldSegments = svg.querySelectorAll('.donut-segment');
+  oldSegments.forEach(seg => seg.remove());
+  
   legendContainer.innerHTML = '';
 
   if (!extensionStats || extensionStats.length === 0) {
@@ -516,7 +595,7 @@ function renderExtensionChart(extensionStats) {
 
   const radius = 60;
   const circumference = 2 * Math.PI * radius; // ~376.99
-  let accumulatedPercent = 0;
+  let accumulatedSize = 0;
 
   extensionStats.forEach((item, index) => {
     const color = EXTENSION_COLORS[index % EXTENSION_COLORS.length];
@@ -531,37 +610,74 @@ function renderExtensionChart(extensionStats) {
       circleSlice.setAttribute('fill', 'transparent');
       circleSlice.setAttribute('stroke', color);
       circleSlice.setAttribute('stroke-width', '20');
-      circleSlice.className.baseVal = 'donut-segment';
+      
+      // Use standard class assignment for SVG
+      let cssClass = 'donut-segment';
+      if (activeExtensionFilter) {
+        if (activeExtensionFilter === item.ext) {
+          cssClass += ' filtered';
+        } else {
+          cssClass += ' dimmed';
+        }
+      }
+      circleSlice.setAttribute('class', cssClass);
 
-      // Dash offset and size
-      const dashSize = (percent / 100) * circumference;
+      // Dash offset and size (standard SVG circle chart method)
+      const dashSize = (item.size / totalExtSize) * circumference;
       const gapSize = circumference - dashSize;
       circleSlice.setAttribute('stroke-dasharray', `${dashSize} ${gapSize}`);
-      
-      // Calculate rotation based on cumulative percentage
-      const startAngle = (accumulatedPercent * 3.6) - 90;
-      circleSlice.setAttribute('transform', `rotate(${startAngle}, 100, 100)`);
+      circleSlice.setAttribute('stroke-dashoffset', (-accumulatedSize).toString());
       
       // Hover tooltip effect
       const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
       title.textContent = `${item.ext}: ${formatBytes(item.size)} (${percent.toFixed(1)}%)`;
       circleSlice.appendChild(title);
 
+      // Filter click handler
+      circleSlice.addEventListener('click', () => toggleExtensionFilter(item.ext));
+
       svg.appendChild(circleSlice);
+      
+      accumulatedSize += dashSize;
     }
 
     // Build Legend item
     const legendItem = document.createElement('div');
-    legendItem.className = 'legend-item';
+    
+    let legendClass = 'legend-item';
+    if (activeExtensionFilter) {
+      if (activeExtensionFilter === item.ext) {
+        legendClass += ' filtered';
+      } else {
+        legendClass += ' dimmed';
+      }
+    }
+    legendItem.className = legendClass;
+    
     legendItem.innerHTML = `
       <div class="legend-color" style="background-color: ${color}"></div>
       <span class="legend-name" title="${item.ext}">${item.ext}</span>
       <span class="legend-val">${formatBytes(item.size)}</span>
     `;
+    
+    // Filter click handler
+    legendItem.addEventListener('click', () => toggleExtensionFilter(item.ext));
+    
     legendContainer.appendChild(legendItem);
-
-    accumulatedPercent += percent;
   });
+}
+
+// Toggle file extension filter
+function toggleExtensionFilter(ext) {
+  if (activeExtensionFilter === ext) {
+    activeExtensionFilter = null;
+  } else {
+    activeExtensionFilter = ext;
+  }
+  
+  // Re-render components to show filtering states
+  renderFolderExplorer();
+  renderExtensionChart(scanData.extension_stats);
 }
 
 // Render Top 100 files scrollbar list

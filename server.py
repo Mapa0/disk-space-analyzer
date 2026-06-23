@@ -53,15 +53,18 @@ def get_scans_info():
                 total_size = 0
                 total_files = 0
                 total_folders = 0
+                target_path = ""
                 with open(filepath, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                     scan_info = data.get("scan_info", {})
                     total_size = scan_info.get("total_size", 0)
                     total_files = scan_info.get("total_files", 0)
                     total_folders = scan_info.get("total_folders", 0)
+                    target_path = scan_info.get("target_path", "")
                 
                 info[filename] = {
                     "label": label,
+                    "target_path": target_path,
                     "timestamp": dt,
                     "mtime": mtime,
                     "total_size": total_size,
