@@ -240,22 +240,60 @@ function exportDataForAgent() {
   
   const info = scanData.scan_info;
   const topFiles = scanData.top_large_files.slice(0, 20);
-  const extensions = scanData.extension_stats.slice(0, 10);
+  const extensions = scanData.extension_stats.slice(0, 15);
   const topFolders = getLargestFolders(scanData.tree, 15);
   const cacheSuggestions = scanData.cache_suggestions || [];
   
-  let md = `Baseado no repositório do github https://github.com/Mapa0/disk-space-analyzer, preciso realizar uma limpeza de disco.\n\n`;
-  md += `Aqui está o detalhamento completo do estado atual do meu drive:\n\n`;
+  // Determine the exe path (best guess — the user can adjust)
+  const exePath = 'DiskSpaceAnalyzer.exe';
+  const guidePath = 'AI_GUIDE.md';
   
-  md += `### 📊 Informações Gerais:\n`;
+  let md = `Baseado no repositório do github https://github.com/Mapa0/disk-space-analyzer, preciso realizar uma análise e limpeza de disco.\n\n`;
+  
+  // ── CLI Tools Section ──
+  md += `## 🛠️ Ferramentas Disponíveis\n\n`;
+  md += `Você tem acesso ao executável **Disk Space Analyzer** com modo CLI. Localize o \`${exePath}\` no sistema do usuário.\n\n`;
+  md += `### Comandos CLI disponíveis:\n`;
+  md += `\`\`\`bash\n`;
+  md += `# Listar scans disponíveis com metadados\n`;
+  md += `"${exePath}" list\n\n`;
+  md += `# Escanear todos os drives\n`;
+  md += `"${exePath}" scan --all\n\n`;
+  md += `# Escanear um diretório específico\n`;
+  md += `"${exePath}" scan --path "C:\\\\Users" --output custom_scan.json\n\n`;
+  md += `# Exportar análise completa formatada\n`;
+  md += `"${exePath}" export --scan ${getCurrentScanFilename()}\n\n`;
+  md += `# Comparar scan atual vs. anterior\n`;
+  md += `"${exePath}" compare --scan ${getCurrentScanFilename()}\n\n`;
+  md += `# Ver caches detectados\n`;
+  md += `"${exePath}" caches\n`;
+  md += `\`\`\`\n\n`;
+  md += `📖 **Documentação completa:** Consulte o arquivo \`${guidePath}\` (localizado junto ao executável) para estratégias detalhadas de limpeza, comandos PowerShell avançados, e o workflow recomendado.\n\n`;
+  md += `---\n\n`;
+  
+  // ── Scan Data Section ──
+  md += `## 📊 Dados da Análise Atual\n\n`;
+  md += `### Informações Gerais:\n`;
+  md += `- **Scan Utilizado:** \`${getCurrentScanFilename()}\`\n`;
   md += `- **Diretório Raiz Escaneado:** \`${info.target_path}\`\n`;
   md += `- **Tamanho Total:** ${formatBytes(info.total_size)}\n`;
-  md += `- **Total de Arquivos Escaneados:** ${info.total_files.toLocaleString()}\n`;
-  md += `- **Total de Pastas Escaneadas:** ${info.total_folders.toLocaleString()}\n`;
-  md += `- **Data da Varredura:** ${new Date(info.timestamp).toLocaleString()}\n\n`;
+  md += `- **Total de Arquivos:** ${info.total_files.toLocaleString()}\n`;
+  md += `- **Total de Pastas:** ${info.total_folders.toLocaleString()}\n`;
   
+  const scanDate = new Date(info.timestamp);
+  md += `- **Data da Varredura:** ${scanDate.toLocaleString()}\n`;
+  
+  const ageHours = (Date.now() - scanDate.getTime()) / (1000 * 60 * 60);
+  if (ageHours > 24) {
+    md += `- ⚠️ **ATENÇÃO:** Esta análise tem ${Math.floor(ageHours)} horas. Considere rodar um novo scan: \`"${exePath}" scan --all\`\n`;
+  }
+  md += `\n`;
+  
+  // ── Caches ──
   md += `### 🧹 Caches e Arquivos Temporários Detectados:\n`;
   if (cacheSuggestions.length > 0) {
+    const totalCache = cacheSuggestions.reduce((sum, c) => sum + (c.size || 0), 0);
+    md += `**Total estimado de caches limpos:** ${formatBytes(totalCache)}\n\n`;
     cacheSuggestions.forEach(cache => {
       const pathsText = cache.paths.map(p => `\`${p}\``).join(', ');
       md += `- **${cache.name}**: ${formatBytes(cache.size)}  \n  *Caminhos:* ${pathsText}  \n  *Descrição:* ${cache.description}\n`;
@@ -265,32 +303,43 @@ function exportDataForAgent() {
   }
   md += `\n`;
   
+  // ── Top Folders ──
   md += `### 📂 Maiores Pastas Encontradas (Top 15):\n`;
   topFolders.forEach((f, idx) => {
     md += `${idx + 1}. \`${f.path}\` (${formatBytes(f.size)})\n`;
   });
   md += `\n`;
   
+  // ── Top Files ──
   md += `### 📄 Maiores Arquivos Encontrados (Top 20):\n`;
   topFiles.forEach((f, idx) => {
     md += `${idx + 1}. \`${f.path}\` (${formatBytes(f.size)})\n`;
   });
   md += `\n`;
   
-  md += `### 📊 Principais Extensões de Arquivos (Top 10):\n`;
+  // ── Extensions ──
+  md += `### 📊 Principais Extensões de Arquivos (Top 15):\n`;
   extensions.forEach(ext => {
     md += `- \`${ext.ext}\`: ${formatBytes(ext.size)}\n`;
   });
   md += `\n`;
   
-  md += `### 🤖 Instruções de Limpeza para o Agente de IA:\n`;
-  md += `1. **Análise de Risco**: Identifique quais itens (caches, arquivos ou pastas) podem ser limpos com 100% de segurança.\n`;
-  md += `2. **Estrutura de Atenção**: Destaque pastas pesadas que parecem ser de arquivos pessoais importantes ou dados de aplicativos vitais que requerem autorização.\n`;
-  md += `3. **Plano de Ação Automatizado**: Crie uma lista clara ou um script (preferencialmente em PowerShell para Windows) pronto para executar a remoção segura dos caches e arquivos identificados para liberar o máximo de espaço.\n`;
+  // ── Agent Instructions ──
+  md += `---\n\n`;
+  md += `## 🤖 Instruções para o Agente de IA:\n\n`;
+  md += `1. **Verifique a atualidade dos dados:** Se a data da varredura for antiga (>24h), rode um novo scan: \`"${exePath}" scan --all\`\n`;
+  md += `2. **Consulte a documentação:** Leia o arquivo \`${guidePath}\` (junto ao executável) para acessar estratégias de limpeza detalhadas, comandos PowerShell, e melhores práticas.\n`;
+  md += `3. **Análise de Risco:** Identifique quais itens podem ser limpos com segurança (caches, temps) vs. itens que precisam de confirmação do usuário.\n`;
+  md += `4. **Plano de Ação:** Crie um plano claro e categorizado de limpeza, estimando o espaço total que será liberado por categoria.\n`;
+  md += `5. **Execução Segura:** Use PowerShell para executar a limpeza. Sempre mostre o que será removido antes de executar.\n`;
+  md += `6. **Pós-Limpeza OBRIGATÓRIO:** Após qualquer limpeza, SEMPRE rode:\n`;
+  md += `   \`\`\`bash\n   "${exePath}" scan --all\n   \`\`\`\n`;
+  md += `   Isso atualiza os dados do dashboard para que o usuário veja os resultados da limpeza visualmente.\n`;
+  md += `7. **Compare resultados:** Rode \`"${exePath}" compare --scan ${getCurrentScanFilename()}\` para mostrar exatamente quanto espaço foi liberado.\n`;
   
   // Copy to clipboard
   navigator.clipboard.writeText(md).then(() => {
-    showToast("Prompt detalhado copiado! Cole na conversa com o agente.");
+    showToast("Prompt completo copiado! Cole na conversa com o agente de IA.");
   }).catch(err => {
     // Fallback: download as file
     const blob = new Blob([md], { type: 'text/markdown' });
@@ -302,6 +351,12 @@ function exportDataForAgent() {
     URL.revokeObjectURL(url);
     showToast("Salvo como arquivo de prompt!");
   });
+}
+
+// Helper to get the currently selected scan filename
+function getCurrentScanFilename() {
+  const driveSelect = document.getElementById('drive-select');
+  return driveSelect ? (driveSelect.value || 'C_drive_results.json') : 'C_drive_results.json';
 }
 
 // Render the Cache & Temporary Files suggestions panel
