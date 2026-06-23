@@ -289,19 +289,7 @@ select.btn-secondary option {
   color: var(--text-primary);
 }
 
-/* Dashboard Grid Layout */
-.dashboard-grid {
-  display: grid;
-  grid-template-columns: 2fr 1fr;
-  gap: 1.5rem;
-  align-items: start;
-}
 
-@media (max-width: 1200px) {
-  .dashboard-grid {
-    grid-template-columns: 1fr;
-  }
-}
 
 /* Panel Structure */
 .panel {
@@ -678,7 +666,7 @@ select.btn-secondary option {
 
 /* SVG ring details */
 .donut-segment {
-  transform-origin: center;
+  pointer-events: stroke;
   transition: stroke-width 0.2s ease, filter 0.2s ease, opacity 0.2s ease;
   cursor: pointer;
 }
@@ -859,4 +847,121 @@ select.btn-secondary option {
 
 .btn-primary svg {
   vertical-align: middle;
+}
+
+/* Folder Space Distribution (Folder Breakdown) */
+.distribution-panel {
+  width: 100%;
+}
+
+.panel-subtitle {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-top: 0.2rem;
+  display: inline-block;
+}
+
+.distribution-bar {
+  display: flex;
+  width: 100%;
+  height: 26px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+  margin-bottom: 1.5rem;
+}
+
+.distribution-segment {
+  height: 100%;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  position: relative;
+}
+
+.distribution-segment:hover {
+  filter: brightness(1.25);
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.15);
+  z-index: 2;
+}
+
+.distribution-legend {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.8rem 1.2rem;
+  font-size: 0.85rem;
+}
+
+.dist-legend-item {
+  display: flex;
+  align-items: center; 
+  gap: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.dist-legend-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.dist-legend-color {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.dist-legend-name {
+  color: var(--text-secondary);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 130px;
+}
+
+.dist-legend-size {
+  color: var(--text-muted);
+  margin-left: auto;
+  font-family: monospace;
+}
+
+.dist-legend-percent {
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 0.8rem;
+  background: rgba(102, 252, 241, 0.1);
+  padding: 0.1rem 0.3rem;
+  border-radius: 3px;
+  margin-left: 0.3rem;
+}
+
+/* Donut Center Size Highlight */
+.donut-center-size {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--accent);
+  margin-top: 0.25rem;
+  font-family: monospace;
+  transition: opacity 0.15s ease;
+}
+
+/* Make Top Files table wrap paths cleanly */
+.large-files-table .item-name-text {
+  max-width: 250px;
+}
+
+.large-files-table td {
+  vertical-align: middle;
+}
+
+.chart-panel .chart-container {
+  max-width: 900px;
+  margin: 0 auto;
 }

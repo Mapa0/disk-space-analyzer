@@ -535,7 +535,7 @@ function renderFolderExplorer() {
       e.stopPropagation();
       const path = copyBtn.getAttribute('data-path');
       navigator.clipboard.writeText(path).then(() => {
-        showToast();
+        showToast("Path copied to clipboard!");
       }).catch(err => {
         console.error("Failed to copy path: ", err);
       });
@@ -543,6 +543,9 @@ function renderFolderExplorer() {
 
     tbody.appendChild(tr);
   });
+  
+  // Render Folder Space Distribution breakdown strip
+  renderFolderDistribution();
 }
 
 // Search input keypress
@@ -633,6 +636,27 @@ function renderExtensionChart(extensionStats) {
       title.textContent = `${item.ext}: ${formatBytes(item.size)} (${percent.toFixed(1)}%)`;
       circleSlice.appendChild(title);
 
+      // Interactive Hover Center Text updates
+      circleSlice.addEventListener('mouseenter', () => {
+        const centerTitle = document.getElementById('donut-center-title');
+        const centerSize = document.getElementById('donut-center-size');
+        if (centerTitle && centerSize) {
+          centerTitle.textContent = item.ext;
+          centerSize.textContent = formatBytes(item.size);
+          centerSize.style.opacity = '1';
+        }
+      });
+      
+      circleSlice.addEventListener('mouseleave', () => {
+        const centerTitle = document.getElementById('donut-center-title');
+        const centerSize = document.getElementById('donut-center-size');
+        if (centerTitle && centerSize) {
+          centerTitle.textContent = 'Extensions';
+          centerSize.textContent = '';
+          centerSize.style.opacity = '0';
+        }
+      });
+
       // Filter click handler
       circleSlice.addEventListener('click', () => toggleExtensionFilter(item.ext));
 
@@ -660,6 +684,42 @@ function renderExtensionChart(extensionStats) {
       <span class="legend-val">${formatBytes(item.size)}</span>
     `;
     
+    // Interactive Legend Hover
+    legendItem.addEventListener('mouseenter', () => {
+      const centerTitle = document.getElementById('donut-center-title');
+      const centerSize = document.getElementById('donut-center-size');
+      if (centerTitle && centerSize) {
+        centerTitle.textContent = item.ext;
+        centerSize.textContent = formatBytes(item.size);
+        centerSize.style.opacity = '1';
+      }
+      
+      // Find corresponding SVG segment slice (match by color stroke)
+      const slices = svg.querySelectorAll('.donut-segment');
+      slices.forEach(slice => {
+        if (slice.getAttribute('stroke') === color) {
+          slice.style.strokeWidth = '25';
+          slice.style.filter = 'drop-shadow(0 0 4px rgba(255, 255, 255, 0.15))';
+        }
+      });
+    });
+    
+    legendItem.addEventListener('mouseleave', () => {
+      const centerTitle = document.getElementById('donut-center-title');
+      const centerSize = document.getElementById('donut-center-size');
+      if (centerTitle && centerSize) {
+        centerTitle.textContent = 'Extensions';
+        centerSize.textContent = '';
+        centerSize.style.opacity = '0';
+      }
+      
+      const slices = svg.querySelectorAll('.donut-segment');
+      slices.forEach(slice => {
+        slice.style.strokeWidth = '';
+        slice.style.filter = '';
+      });
+    });
+
     // Filter click handler
     legendItem.addEventListener('click', () => toggleExtensionFilter(item.ext));
     
@@ -680,52 +740,192 @@ function toggleExtensionFilter(ext) {
   renderExtensionChart(scanData.extension_stats);
 }
 
-// Render Top 100 files scrollbar list
+// Render Top Files table
 function renderLargeFilesList(topFiles) {
-  const container = document.getElementById('large-files-list');
-  container.innerHTML = '';
+  const tbody = document.getElementById('large-files-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
 
   if (!topFiles || topFiles.length === 0) {
-    container.innerHTML = `<li style="text-align: center; color: var(--text-muted); padding: 1rem;">No large files recorded</li>`;
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">No large files recorded</td></tr>`;
     return;
   }
 
-  topFiles.forEach(file => {
-    const li = document.createElement('li');
-    li.className = 'large-file-item';
-    li.innerHTML = `
-      <div class="large-file-details">
-        <div class="large-file-title" title="${file.name}">${file.name}</div>
-        <div class="large-file-path" title="${file.path}">${file.path}</div>
-      </div>
-      <div class="large-file-size">${formatBytes(file.size)}</div>
-      <button class="action-btn-copy" title="Copy full path" data-path="${file.path.replace(/\\/g, '/')}">
-        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-          <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
-        </svg>
-      </button>
+  // Limit to top 20 files for neat display
+  const displayFiles = topFiles.slice(0, 20);
+
+  displayFiles.forEach((file, index) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="font-weight: 600; color: var(--text-muted); text-align: center;">${index + 1}</td>
+      <td class="col-name">
+        <div class="item-name-cell">
+          <div class="item-icon" style="color: var(--text-muted);">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+          </div>
+          <span class="item-name-text" title="${file.name}">${file.name}</span>
+        </div>
+      </td>
+      <td style="color: var(--text-muted); font-size: 0.85rem; max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+        <span title="${file.path}">${file.path}</span>
+      </td>
+      <td style="font-weight: 600; color: var(--accent); font-family: monospace;">${formatBytes(file.size)}</td>
+      <td style="text-align: right;">
+        <button class="action-btn-copy" title="Copy full path" data-path="${file.path.replace(/\\/g, '/')}">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+            <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+          </svg>
+        </button>
+      </td>
     `;
 
     // Copy path clipboard hook
-    const copyBtn = li.querySelector('.action-btn-copy');
+    const copyBtn = tr.querySelector('.action-btn-copy');
     copyBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
       const path = copyBtn.getAttribute('data-path');
       navigator.clipboard.writeText(path).then(() => {
-        showToast();
+        showToast("Path copied to clipboard!");
       }).catch(err => {
         console.error("Failed to copy path: ", err);
       });
     });
 
-    container.appendChild(li);
+    tbody.appendChild(tr);
   });
 }
 
-// Show copying path notification
-function showToast() {
-  const toast = document.getElementById('toast');
-  toast.classList.add('show');
-  setTimeout(() => {
-    toast.classList.remove('show');
-  }, 2500);
+// Curated colors for folder space distribution segments
+const DIST_COLORS = [
+  '#7f00ff', // Purple
+  '#0072ff', // Blue
+  '#e100ff', // Magenta
+  '#00f2fe', // Cyan
+  '#2ecc71', // Green
+  '#f1c40f', // Yellow
+  '#e67e22', // Orange
+  '#e74c3c'  // Red
+];
+
+// Render visual folder size distribution strip
+function renderFolderDistribution() {
+  const bar = document.getElementById('distribution-bar');
+  const legend = document.getElementById('distribution-legend');
+  const subtitle = document.getElementById('distribution-subtitle');
+  
+  if (!bar || !legend) return;
+  
+  bar.innerHTML = '';
+  legend.innerHTML = '';
+  
+  if (!currentFolderNode || !currentFolderNode.children || currentFolderNode.children.length === 0) {
+    bar.innerHTML = `<div style="padding: 0.5rem; text-align: center; color: var(--text-muted); font-size: 0.85rem; width: 100%;">No sub-items to distribute</div>`;
+    subtitle.textContent = "Empty folder";
+    return;
+  }
+  
+  subtitle.textContent = `Visual size breakdown of items in: ${currentFolderNode.name} (${formatBytes(currentFolderNode.size)})`;
+  
+  // Get direct children and sort them by size descending
+  const children = [...currentFolderNode.children].sort((a, b) => b.size - a.size);
+  const totalSize = currentFolderNode.size || 1;
+  
+  // Group everything after the top 7 largest into "Others"
+  const maxItems = 7;
+  let displayItems = children.slice(0, maxItems);
+  const otherItems = children.slice(maxItems);
+  
+  if (otherItems.length > 0) {
+    const otherSize = otherItems.reduce((sum, item) => sum + item.size, 0);
+    displayItems.push({
+      name: 'Others',
+      size: otherSize,
+      is_dir: false,
+      path: '',
+      isOthers: true
+    });
+  }
+  
+  displayItems.forEach((item, idx) => {
+    const percent = ((item.size / totalSize) * 100);
+    if (percent < 0.1) return; // Skip tiny segments
+    
+    const color = DIST_COLORS[idx % DIST_COLORS.length];
+    
+    // Create segment element
+    const seg = document.createElement('div');
+    seg.className = 'distribution-segment';
+    seg.style.width = `${percent}%`;
+    seg.style.backgroundColor = color;
+    seg.title = `${item.name}: ${formatBytes(item.size)} (${percent.toFixed(1)}%)`;
+    
+    // Click handler to navigate if it's a directory
+    if (item.is_dir) {
+      seg.addEventListener('click', () => {
+        navigateToFolder(item);
+      });
+    }
+    
+    // Hover handlers to highlight in legend
+    seg.addEventListener('mouseenter', () => {
+      highlightLegendItem(idx);
+    });
+    seg.addEventListener('mouseleave', () => {
+      clearLegendHighlights();
+    });
+    
+    bar.appendChild(seg);
+    
+    // Create legend item
+    const legItem = document.createElement('div');
+    legItem.className = 'dist-legend-item';
+    legItem.id = `dist-leg-${idx}`;
+    legItem.innerHTML = `
+      <div class="dist-legend-color" style="background-color: ${color}"></div>
+      <span class="dist-legend-name" title="${item.name}">${item.name}</span>
+      <span class="dist-legend-size">${formatBytes(item.size)}</span>
+      <span class="dist-legend-percent">${percent.toFixed(1)}%</span>
+    `;
+    
+    if (item.is_dir) {
+      legItem.addEventListener('click', () => {
+        navigateToFolder(item);
+      });
+    }
+    
+    // Hover legend item highlights segment in bar
+    legItem.addEventListener('mouseenter', () => {
+      seg.style.filter = 'brightness(1.25)';
+      seg.style.transform = 'scaleY(1.05)';
+      seg.style.boxShadow = '0 0 10px rgba(255, 255, 255, 0.15)';
+    });
+    legItem.addEventListener('mouseleave', () => {
+      seg.style.filter = '';
+      seg.style.transform = '';
+      seg.style.boxShadow = '';
+    });
+    
+    legend.appendChild(legItem);
+  });
+}
+
+function highlightLegendItem(index) {
+  const items = document.querySelectorAll('.dist-legend-item');
+  items.forEach((item, idx) => {
+    if (idx === index) {
+      item.style.background = 'rgba(255, 255, 255, 0.08)';
+      item.style.borderColor = 'rgba(255, 255, 255, 0.15)';
+    } else {
+      item.style.opacity = '0.35';
+    }
+  });
+}
+
+function clearLegendHighlights() {
+  const items = document.querySelectorAll('.dist-legend-item');
+  items.forEach(item => {
+    item.style.background = '';
+    item.style.borderColor = '';
+    item.style.opacity = '';
+  });
 }
