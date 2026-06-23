@@ -880,41 +880,42 @@ select.btn-secondary option {
 
 .tree-link {
   fill: none;
-  stroke: rgba(102, 252, 241, 0.15);
+  stroke: rgba(255, 255, 255, 0.2);
   stroke-width: 2px;
   transition: stroke 0.25s ease, stroke-width 0.25s ease;
 }
 
 .tree-link.highlighted {
-  stroke: var(--accent);
+  stroke: #ffffff;
   stroke-width: 3.5px;
 }
 
 .tree-node-circle {
-  fill: #1f2833;
-  stroke: var(--accent);
+  fill: #0b0c10;
+  stroke: #ffffff;
   stroke-width: 2.5px;
   cursor: pointer;
   transition: fill 0.25s ease, stroke-width 0.25s ease, transform 0.25s ease, filter 0.25s ease;
 }
 
 .tree-node-circle:hover {
-  fill: var(--accent);
-  filter: drop-shadow(0 0 8px var(--accent));
+  fill: #ffffff;
+  filter: drop-shadow(0 0 8px #ffffff);
   stroke-width: 3.5px;
 }
 
 .tree-node-text {
   font-size: 0.85rem;
-  fill: var(--text-primary);
-  font-weight: 500;
+  fill: #ffffff;
+  font-weight: 600;
   pointer-events: none;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
 }
 
 .tree-node-size {
   font-size: 0.75rem;
-  fill: var(--text-muted);
+  fill: rgba(255, 255, 255, 0.75);
   font-family: monospace;
   pointer-events: none;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
 }

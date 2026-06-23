@@ -834,6 +834,18 @@ function calculateFolderExtensionStats(node) {
 // Global counter for node IDs
 let nodeIdCounter = 0;
 
+// Helper to count leaf nodes in tree
+function countLeaves(node) {
+  if (!node.children || node.children.length === 0) {
+    return 1;
+  }
+  return node.children.reduce((sum, child) => sum + countLeaves(child), 0);
+}
+
+// Global variables for vertical leaf layouts
+let leafCounter = 0;
+let numLeaves = 0;
+
 // Generate the collapsible folder tree hierarchy
 function renderFolderTree() {
   const svg = document.getElementById('folder-tree-svg');
@@ -850,14 +862,16 @@ function renderFolderTree() {
     return;
   }
 
-  // 2. Lay out the nodes using tidy bottom-up positioning
-  yCounter = 0;
+  // 2. Count total leaves to calculate horizontal spacing
+  numLeaves = countLeaves(treeData);
+
+  // 3. Lay out the nodes using vertical bottom-up positioning
+  leafCounter = 0;
   assignCoordinates(treeData, 0);
 
-  // 3. Set dynamic height based on number of leaf nodes
-  const dynamicHeight = Math.max(450, yCounter * 60);
-  svg.setAttribute('height', dynamicHeight.toString());
-  svg.setAttribute('viewBox', `0 0 900 ${dynamicHeight}`);
+  // Set fixed layout viewbox
+  svg.setAttribute('height', '450');
+  svg.setAttribute('viewBox', '0 0 900 450');
 
   // Create a container group for rendering links and nodes
   const mainGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
@@ -901,31 +915,30 @@ function buildTreeData(node, depth, maxDepth) {
   return treeNode;
 }
 
-// Global yCounter for tree node Y layouts
-let yCounter = 0;
-
-// Coordinate layout assignment for tree node positioning
+// Coordinate layout assignment for tree node positioning (Vertical Bottom-Up)
 function assignCoordinates(node, depth) {
   node.depth = depth;
-  node.x = 80 + depth * 220; // Column horizontal offset
+  // Y coordinate: Root (depth 0) is at the bottom (400px), children branch upwards
+  node.y = 400 - depth * 110;
   
   if (node.children && node.children.length > 0) {
     node.children.forEach(child => assignCoordinates(child, depth + 1));
-    // Center parent vertically between first and last child midpoint
-    const firstChildY = node.children[0].y;
-    const lastChildY = node.children[node.children.length - 1].y;
-    node.y = (firstChildY + lastChildY) / 2;
+    // Center parent horizontally between first and last child midpoint
+    const firstChildX = node.children[0].x;
+    const lastChildX = node.children[node.children.length - 1].x;
+    node.x = (firstChildX + lastChildX) / 2;
   } else {
-    // Assign sequential slot to leaf node
-    node.y = 50 + yCounter * 60;
-    yCounter++;
+    // Assign sequential horizontal slot to leaf node
+    const spacingX = numLeaves > 1 ? 800 / (numLeaves - 1) : 400;
+    node.x = 50 + leafCounter * spacingX;
+    leafCounter++;
   }
 }
 
-// Bezier path link coordinate helper
+// Bezier path link coordinate helper (Vertical S-Curve)
 function drawBezierLink(x1, y1, x2, y2) {
-  const midX = (x1 + x2) / 2;
-  return `M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2} ${y2}`;
+  const midY = (y1 + y2) / 2;
+  return `M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`;
 }
 
 // Draw links recursively in the SVG tree diagram
@@ -988,10 +1001,10 @@ function drawNodes(group, node) {
   
   nodeG.appendChild(circle);
   
-  // Name Label
+  // Name Label (drawn to the right of the circle, safe from link curves)
   const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
   text.setAttribute('x', (node.x + radius + 8).toString());
-  text.setAttribute('y', (node.y + 4).toString());
+  text.setAttribute('y', (node.y + 2).toString());
   text.setAttribute('class', 'tree-node-text');
   text.textContent = node.name;
   nodeG.appendChild(text);
@@ -999,7 +1012,7 @@ function drawNodes(group, node) {
   // Size Label (sub-caption)
   const sizeText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
   sizeText.setAttribute('x', (node.x + radius + 8).toString());
-  sizeText.setAttribute('y', (node.y + 18).toString());
+  sizeText.setAttribute('y', (node.y + 14).toString());
   sizeText.setAttribute('class', 'tree-node-size');
   sizeText.textContent = formatBytes(node.size);
   nodeG.appendChild(sizeText);
