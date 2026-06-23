@@ -305,6 +305,7 @@ function formatBytes(bytes, decimals = 2) {
 // Navigate into a subfolder
 function navigateToFolder(folderNode) {
   if (!folderNode.is_dir) return;
+  if (currentFolderNode && folderNode.path === currentFolderNode.path) return;
   
   navigationHistory.push(currentFolderNode);
   currentFolderNode = folderNode;
@@ -845,6 +846,14 @@ function calculateFolderExtensionStats(node) {
   return extensionsList;
 }
 
+// Helper to get color gradient based on folder size ratio
+function getIntensityColor(ratio) {
+  // Interpolate Hue from 200 (cool cyan/blue) to 360 (hot red)
+  // Use Math.pow(ratio, 0.7) to push mid-sized folders to warmer purple/magenta colors faster
+  const hue = 200 + Math.pow(ratio, 0.7) * 160;
+  return `hsl(${hue}, 100%, 60%)`;
+}
+
 // Generate the collapsible folder tree hierarchy using Apache ECharts
 function renderFolderTree() {
   const chartDom = document.getElementById('folder-tree-chart');
@@ -854,7 +863,8 @@ function renderFolderTree() {
 
   // 1. Build a clean tree structure of folders with >= 1% weight
   let nodeIdCounter = 0;
-  const treeData = buildTreeData(currentFolderNode, 0, 3);
+  const rootSize = currentFolderNode.size || 1;
+  const treeData = buildTreeData(currentFolderNode, 0, 3, rootSize);
   if (!treeData) {
     chartDom.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 2rem;">No directory data available for tree graph</div>`;
     return;
@@ -894,23 +904,20 @@ function renderFolderTree() {
         bottom: '8%',
         left: '12%',
         right: '12%',
-        nodePadding: 45, // Spacing between sibling nodes
+        nodePadding: 60, // Spacing between sibling nodes (increased to 60px for extra space)
         symbol: 'circle',
         symbolSize: (value, params) => {
-          // Dynamic radius proportional to square root of folder size ratio
-          return Math.max(12, 12 + Math.sqrt(params.data.size / parentSize) * 36);
+          // Linear size difference for clear intensity feel (from 12px to 60px)
+          const ratio = params.data.size / parentSize;
+          return Math.max(12, 12 + ratio * 48);
         },
         lineStyle: {
-          color: 'rgba(255, 255, 255, 0.3)',
+          color: 'rgba(255, 255, 255, 0.25)',
           width: 2,
           curveness: 0.5
         },
-        itemStyle: {
-          color: '#0b0c10',
-          borderColor: '#ffffff',
-          borderWidth: 2.5
-        },
         label: {
+          show: false, // HIDE LABELS BY DEFAULT to prevent overlap / clutter
           position: 'right',
           verticalAlign: 'middle',
           align: 'left',
@@ -926,18 +933,16 @@ function renderFolderTree() {
         },
         leaves: {
           label: {
-            position: 'top', // Labels for leaf nodes at the top sit above the node to avoid overlapping horizontally
+            show: false, // HIDE LEAF LABELS BY DEFAULT
+            position: 'top', // Labels for leaf nodes sit above the node when hovered
             verticalAlign: 'bottom',
             align: 'center',
             distance: 8
           }
         },
         emphasis: {
-          itemStyle: {
-            color: '#ffffff',
-            borderColor: '#ffffff',
-            shadowBlur: 10,
-            shadowColor: '#ffffff'
+          label: {
+            show: true // SHOW LABELS ONLY ON HOVER
           },
           lineStyle: {
             color: '#ffffff',
@@ -967,14 +972,30 @@ function renderFolderTree() {
 }
 
 // Helper to compile directory sub-nodes recursively
-function buildTreeData(node, depth, maxDepth) {
+function buildTreeData(node, depth, maxDepth, rootSize) {
   if (!node || !node.is_dir || depth > maxDepth) return null;
+  
+  const ratio = node.size / rootSize;
+  const color = getIntensityColor(ratio);
   
   const treeNode = {
     name: node.name,
     size: node.size,
     path: node.path,
     is_dir: true,
+    itemStyle: {
+      color: '#0b0c10',
+      borderColor: color,
+      borderWidth: 2.5
+    },
+    emphasis: {
+      itemStyle: {
+        color: color,
+        borderColor: color,
+        shadowBlur: 15,
+        shadowColor: color
+      }
+    },
     children: []
   };
   
@@ -986,7 +1007,7 @@ function buildTreeData(node, depth, maxDepth) {
     const threshold = currentFolderNode.size * 0.01;
     node.children.forEach(child => {
       if (child.is_dir && child.size >= threshold) {
-        const childTree = buildTreeData(child, depth + 1, maxDepth);
+        const childTree = buildTreeData(child, depth + 1, maxDepth, rootSize);
         if (childTree) {
           treeNode.children.push(childTree);
         }
