@@ -1,0 +1,16 @@
+# Exclude scan results and backups to protect privacy (crucial!)
+*.json
+*.json.bak
+*.bak
+
+# Python caches
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# OS and IDE files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

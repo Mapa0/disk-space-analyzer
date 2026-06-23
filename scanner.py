@@ -1,0 +1,188 @@
+import os
+import sys
+import json
+import time
+import heapq
+import argparse
+from datetime import datetime
+
+# Common folders to ignore (system locks, virtual drives, etc. that can cause extreme delay or permission issues)
+IGNORE_NAMES = {
+    "$RECYCLE.BIN", "System Volume Information", "$Recycle.Bin",
+    "Recovery", "pagefile.sys", "hiberfil.sys", "swapfile.sys"
+}
+
+class DiskScanner:
+    def __init__(self, target_path, max_depth=6, max_large_files=100):
+        self.target_path = os.path.abspath(target_path)
+        self.max_depth = max_depth
+        self.max_large_files = max_large_files
+        
+        # Stats
+        self.total_files = 0
+        self.total_folders = 0
+        self.total_size = 0
+        
+        # Extension stats: {ext: size}
+        self.extension_stats = {}
+        
+        # Min-heap to keep track of the largest files: [(size, path, name)]
+        self.large_files_heap = []
+        
+        # Progress reporting
+        self.folders_scanned = 0
+        self.last_report_time = time.time()
+
+    def scan(self):
+        print(f"Scanning target: {self.target_path}")
+        print("This may take some time depending on folder size and drive speed...")
+        start_time = time.time()
+        
+        # Run recursive scanning
+        tree = self._scan_directory(self.target_path, current_depth=0)
+        
+        # Convert heap to a sorted list of dicts (descending order)
+        top_files = []
+        sorted_heap = sorted(self.large_files_heap, key=lambda x: x[0], reverse=True)
+        for size, path, name in sorted_heap:
+            top_files.append({
+                "name": name,
+                "path": path,
+                "size": size
+            })
+            
+        # Format extension stats
+        sorted_extensions = sorted(self.extension_stats.items(), key=lambda x: x[1], reverse=True)
+        extensions_list = [{"ext": ext if ext else "no_ext", "size": size} for ext, size in sorted_extensions[:30]]
+        
+        # Other extensions summed
+        other_size = sum(size for ext, size in sorted_extensions[30:])
+        if other_size > 0:
+            extensions_list.append({"ext": "others", "size": other_size})
+
+        scan_duration = time.time() - start_time
+        print(f"\nScan completed in {scan_duration:.2f} seconds.")
+        print(f"Total folders: {self.total_folders}")
+        print(f"Total files: {self.total_files}")
+        print(f"Total size: {self.total_size / (1024**3):.2f} GB")
+
+        return {
+            "scan_info": {
+                "target_path": self.target_path,
+                "timestamp": datetime.now().isoformat(),
+                "total_size": self.total_size,
+                "total_files": self.total_files,
+                "total_folders": self.total_folders,
+                "duration_seconds": scan_duration
+            },
+            "tree": tree,
+            "top_large_files": top_files,
+            "extension_stats": extensions_list
+        }
+
+    def _scan_directory(self, path, current_depth):
+        self.folders_scanned += 1
+        # Print progress every 3 seconds
+        current_time = time.time()
+        if current_time - self.last_report_time > 3.0:
+            print(f"Scanned {self.folders_scanned} folders, found {self.total_files} files (current: {os.path.basename(path)})...", flush=True)
+            self.last_report_time = current_time
+
+        dir_name = os.path.basename(path) or path
+        node = {
+            "name": dir_name,
+            "path": path,
+            "size": 0,
+            "is_dir": True
+        }
+        
+        # Only include children array if we are under the max depth
+        include_children = current_depth < self.max_depth
+        if include_children:
+            node["children"] = []
+
+        total_dir_size = 0
+        self.total_folders += 1
+
+        try:
+            with os.scandir(path) as it:
+                for entry in it:
+                    try:
+                        if entry.name in IGNORE_NAMES:
+                            continue
+                        
+                        # Handle symbolic links (skip them to prevent infinite loops / double counting)
+                        if entry.is_symlink():
+                            continue
+
+                        if entry.is_file():
+                            try:
+                                stat = entry.stat()
+                                file_size = stat.st_size
+                            except (OSError, FileNotFoundError, PermissionError):
+                                continue
+                            
+                            self.total_files += 1
+                            self.total_size += file_size
+                            total_dir_size += file_size
+                            
+                            # Update extension stats
+                            _, ext = os.path.splitext(entry.name)
+                            ext = ext.lower()
+                            self.extension_stats[ext] = self.extension_stats.get(ext, 0) + file_size
+
+                            # Update large files heap
+                            if len(self.large_files_heap) < self.max_large_files:
+                                heapq.heappush(self.large_files_heap, (file_size, entry.path, entry.name))
+                            elif file_size > self.large_files_heap[0][0]:
+                                heapq.heapreplace(self.large_files_heap, (file_size, entry.path, entry.name))
+
+                            # Add file node to tree if depth allows
+                            if include_children:
+                                node["children"].append({
+                                    "name": entry.name,
+                                    "path": entry.path,
+                                    "size": file_size,
+                                    "is_dir": False
+                                })
+
+                        elif entry.is_dir():
+                            child_node = self._scan_directory(entry.path, current_depth + 1)
+                            total_dir_size += child_node["size"]
+                            
+                            if include_children:
+                                node["children"].append(child_node)
+
+                    except (OSError, PermissionError, FileNotFoundError):
+                        # Catch errors reading files or subdirectories
+                        continue
+        except (OSError, PermissionError):
+            # Catch errors listing the directory itself
+            pass
+
+        node["size"] = total_dir_size
+        
+        # Sort children of this node by size (descending) if they exist
+        if include_children and "children" in node:
+            node["children"].sort(key=lambda x: x["size"], reverse=True)
+            
+        return node
+
+def main():
+    parser = argparse.ArgumentParser(description="Scan folder sizes and output JSON summary.")
+    parser.add_argument("-p", "--path", default=os.path.expanduser("~"), help="Directory path to scan (default: user home directory)")
+    parser.add_argument("-o", "--output", default="scan_results.json", help="Path to save the JSON output (default: scan_results.json)")
+    parser.add_argument("-d", "--depth", type=int, default=6, help="Maximum depth to export in folder tree (default: 6)")
+    
+    args = parser.parse_args()
+    
+    scanner = DiskScanner(args.path, max_depth=args.depth)
+    results = scanner.scan()
+    
+    print(f"Saving scan results to: {args.output}")
+    with open(args.output, "w", encoding="utf-8") as f:
+        json.dump(results, f, ensure_ascii=False, indent=2)
+    print("Done!")
+
+if __name__ == "__main__":
+    main()
