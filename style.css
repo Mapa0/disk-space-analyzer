@@ -588,7 +588,7 @@ select.btn-secondary option {
 }
 
 #extension-chart {
-  transform: rotate(-90deg);
+  /* No rotation to ensure perfect coordinate matching for mouse hover hit-testing */
 }
 
 .donut-center {
@@ -849,99 +849,6 @@ select.btn-secondary option {
   vertical-align: middle;
 }
 
-/* Folder Space Distribution (Folder Breakdown) */
-.distribution-panel {
-  width: 100%;
-}
-
-.panel-subtitle {
-  font-size: 0.85rem;
-  color: var(--text-muted);
-  margin-top: 0.2rem;
-  display: inline-block;
-}
-
-.distribution-bar {
-  display: flex;
-  width: 100%;
-  height: 26px;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
-  margin-bottom: 1.5rem;
-}
-
-.distribution-segment {
-  height: 100%;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  cursor: pointer;
-  position: relative;
-}
-
-.distribution-segment:hover {
-  filter: brightness(1.25);
-  box-shadow: 0 0 10px rgba(255, 255, 255, 0.15);
-  z-index: 2;
-}
-
-.distribution-legend {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 0.8rem 1.2rem;
-  font-size: 0.85rem;
-}
-
-.dist-legend-item {
-  display: flex;
-  align-items: center; 
-  gap: 0.5rem;
-  padding: 0.4rem 0.6rem;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.03);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.dist-legend-item:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.1);
-}
-
-.dist-legend-color {
-  width: 10px;
-  height: 10px;
-  border-radius: 3px;
-  flex-shrink: 0;
-}
-
-.dist-legend-name {
-  color: var(--text-secondary);
-  font-weight: 500;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 130px;
-}
-
-.dist-legend-size {
-  color: var(--text-muted);
-  margin-left: auto;
-  font-family: monospace;
-}
-
-.dist-legend-percent {
-  color: var(--accent);
-  font-weight: 600;
-  font-size: 0.8rem;
-  background: rgba(102, 252, 241, 0.1);
-  padding: 0.1rem 0.3rem;
-  border-radius: 3px;
-  margin-left: 0.3rem;
-}
-
 /* Donut Center Size Highlight */
 .donut-center-size {
   font-size: 1.1rem;
@@ -964,4 +871,50 @@ select.btn-secondary option {
 .chart-panel .chart-container {
   max-width: 900px;
   margin: 0 auto;
+}
+
+/* Folder Tree Graph Visualizer */
+.tree-panel {
+  width: 100%;
+}
+
+.tree-link {
+  fill: none;
+  stroke: rgba(102, 252, 241, 0.15);
+  stroke-width: 2px;
+  transition: stroke 0.25s ease, stroke-width 0.25s ease;
+}
+
+.tree-link.highlighted {
+  stroke: var(--accent);
+  stroke-width: 3.5px;
+}
+
+.tree-node-circle {
+  fill: #1f2833;
+  stroke: var(--accent);
+  stroke-width: 2.5px;
+  cursor: pointer;
+  transition: fill 0.25s ease, stroke-width 0.25s ease, transform 0.25s ease, filter 0.25s ease;
+}
+
+.tree-node-circle:hover {
+  fill: var(--accent);
+  filter: drop-shadow(0 0 8px var(--accent));
+  stroke-width: 3.5px;
+}
+
+.tree-node-text {
+  font-size: 0.85rem;
+  fill: var(--text-primary);
+  font-weight: 500;
+  pointer-events: none;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+}
+
+.tree-node-size {
+  font-size: 0.75rem;
+  fill: var(--text-muted);
+  font-family: monospace;
+  pointer-events: none;
 }

@@ -85,23 +85,7 @@
         </div>
       </section>
 
-      <!-- ROW 1: Folder Space Distribution (Folder Breakdown) -->
-      <section class="panel distribution-panel" id="distribution-panel">
-        <div class="panel-header">
-          <h2>Folder Space Distribution</h2>
-          <span class="panel-subtitle" id="distribution-subtitle">Visual size breakdown of items in the current folder</span>
-        </div>
-        <div class="panel-body">
-          <div class="distribution-bar" id="distribution-bar">
-            <!-- Dynamic segments generated here -->
-          </div>
-          <div class="distribution-legend" id="distribution-legend">
-            <!-- Legend items generated here -->
-          </div>
-        </div>
-      </section>
-
-      <!-- ROW 2: Interactive Folder Explorer -->
+      <!-- ROW 1: Interactive Folder Explorer -->
       <section class="panel explorer-panel">
         <div class="panel-header">
           <div class="explorer-navigation">
@@ -134,7 +118,7 @@
         </div>
       </section>
 
-      <!-- ROW 3: Top Files (Tabela de Maiores Arquivos) -->
+      <!-- ROW 2: Top Files (Tabela de Maiores Arquivos) -->
       <section class="panel large-files-panel">
         <div class="panel-header">
           <h2>Top Files</h2>
@@ -157,7 +141,7 @@
         </div>
       </section>
 
-      <!-- ROW 4: File Type Breakdown -->
+      <!-- ROW 3: File Type Breakdown -->
       <section class="panel chart-panel">
         <div class="panel-header">
           <h2>File Type Breakdown</h2>
@@ -165,7 +149,7 @@
         <div class="panel-body chart-container">
           <div class="donut-chart-wrapper">
             <svg id="extension-chart" viewBox="0 0 200 200" width="100%" height="100%">
-              <circle cx="100" cy="100" r="60" fill="transparent" stroke="var(--bg-card)" stroke-width="25"></circle>
+              <circle cx="100" cy="100" r="60" fill="transparent" stroke="var(--bg-card)" stroke-width="25" style="pointer-events: none;"></circle>
             </svg>
             <div class="donut-center">
               <div id="donut-center-title" class="donut-center-title">Extensions</div>
@@ -175,6 +159,19 @@
           <div class="chart-legend" id="chart-legend">
             <!-- Legend items generated here -->
           </div>
+        </div>
+      </section>
+
+      <!-- ROW 4: Folder Hierarchy Tree Visualizer -->
+      <section class="panel tree-panel" id="tree-panel">
+        <div class="panel-header">
+          <h2>Folder Hierarchy Tree</h2>
+          <span class="panel-subtitle">Visual tree map showing subfolder weights (click a node to drill down)</span>
+        </div>
+        <div class="panel-body" style="background: rgba(0, 0, 0, 0.25); overflow-x: auto; display: flex; justify-content: center; align-items: center; padding: 1.5rem 1rem;">
+          <svg id="folder-tree-svg" width="100%" height="450" style="min-width: 800px; display: block; overflow: visible;">
+            <!-- Dynamic links and nodes generated here -->
+          </svg>
         </div>
       </section>
     </main>

@@ -279,11 +279,8 @@ function initializeDashboard(data) {
   document.getElementById('stat-total-folders').textContent = data.scan_info.total_folders.toLocaleString();
   document.getElementById('stat-total-files').textContent = data.scan_info.total_files.toLocaleString();
 
-  // Load Folder Explorer
+  // Load Folder Explorer (which will also calculate extension stats and render tree for the root folder)
   renderFolderExplorer();
-
-  // Load Extensions Chart
-  renderExtensionChart(data.extension_stats);
 
   // Load Top Large Files List
   renderLargeFilesList(data.top_large_files);
@@ -544,8 +541,12 @@ function renderFolderExplorer() {
     tbody.appendChild(tr);
   });
   
-  // Render Folder Space Distribution breakdown strip
-  renderFolderDistribution();
+  // Calculate and Render File Type Breakdown for the active folder
+  const folderExtStats = calculateFolderExtensionStats(currentFolderNode);
+  renderExtensionChart(folderExtStats);
+
+  // Render collapsible folder tree hierarchy
+  renderFolderTree();
 }
 
 // Search input keypress
@@ -795,137 +796,207 @@ function renderLargeFilesList(topFiles) {
   });
 }
 
-// Curated colors for folder space distribution segments
-const DIST_COLORS = [
-  '#7f00ff', // Purple
-  '#0072ff', // Blue
-  '#e100ff', // Magenta
-  '#00f2fe', // Cyan
-  '#2ecc71', // Green
-  '#f1c40f', // Yellow
-  '#e67e22', // Orange
-  '#e74c3c'  // Red
-];
+// Recursively calculate file type breakdown for the active folder node
+function calculateFolderExtensionStats(node) {
+  const stats = {};
+  
+  function traverse(currentNode) {
+    if (!currentNode) return;
+    if (!currentNode.is_dir) {
+      const ext = getFileExtension(currentNode.name);
+      stats[ext] = (stats[ext] || 0) + (currentNode.size || 0);
+    } else if (currentNode.children) {
+      currentNode.children.forEach(child => traverse(child));
+    }
+  }
+  
+  traverse(node);
+  
+  // Convert stats dictionary to sorted array
+  const sortedStats = Object.entries(stats)
+    .map(([ext, size]) => ({ ext, size }))
+    .sort((a, b) => b.size - a.size);
+  
+  // Format it (top 15 extensions, rest grouped as others)
+  const extensionsList = sortedStats.slice(0, 15);
+  const otherSize = sortedStats.slice(15).reduce((sum, item) => sum + item.size, 0);
+  if (otherSize > 0) {
+    extensionsList.push({ ext: 'others', size: otherSize });
+  }
+  
+  return extensionsList;
+}
 
-// Render visual folder size distribution strip
-function renderFolderDistribution() {
-  const bar = document.getElementById('distribution-bar');
-  const legend = document.getElementById('distribution-legend');
-  const subtitle = document.getElementById('distribution-subtitle');
-  
-  if (!bar || !legend) return;
-  
-  bar.innerHTML = '';
-  legend.innerHTML = '';
-  
-  if (!currentFolderNode || !currentFolderNode.children || currentFolderNode.children.length === 0) {
-    bar.innerHTML = `<div style="padding: 0.5rem; text-align: center; color: var(--text-muted); font-size: 0.85rem; width: 100%;">No sub-items to distribute</div>`;
-    subtitle.textContent = "Empty folder";
+// Generate the collapsible folder tree hierarchy
+function renderFolderTree() {
+  const svg = document.getElementById('folder-tree-svg');
+  if (!svg) return;
+  svg.innerHTML = '';
+
+  if (!currentFolderNode) return;
+
+  // 1. Build a clean tree structure of folders with >= 1% weight
+  const treeData = buildTreeData(currentFolderNode, 0, 3);
+  if (!treeData) {
+    svg.innerHTML = `<text x="50%" y="50%" text-anchor="middle" fill="var(--text-muted)">No directory data available for tree graph</text>`;
     return;
   }
+
+  // 2. Lay out the nodes using tidy bottom-up positioning
+  yCounter = 0;
+  assignCoordinates(treeData, 0);
+
+  // 3. Set dynamic height based on number of leaf nodes
+  const dynamicHeight = Math.max(450, yCounter * 60);
+  svg.setAttribute('height', dynamicHeight.toString());
+  svg.setAttribute('viewBox', `0 0 900 ${dynamicHeight}`);
+
+  // Create a container group for rendering links and nodes
+  const mainGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  svg.appendChild(mainGroup);
+
+  // Draw links first so they are placed behind the node circles
+  drawLinks(mainGroup, treeData);
   
-  subtitle.textContent = `Visual size breakdown of items in: ${currentFolderNode.name} (${formatBytes(currentFolderNode.size)})`;
+  // Draw node circles and text labels
+  drawNodes(mainGroup, treeData);
+}
+
+// Helper to compile directory sub-nodes recursively
+function buildTreeData(node, depth, maxDepth) {
+  if (!node || !node.is_dir || depth > maxDepth) return null;
   
-  // Get direct children and sort them by size descending
-  const children = [...currentFolderNode.children].sort((a, b) => b.size - a.size);
-  const totalSize = currentFolderNode.size || 1;
+  const treeNode = {
+    name: node.name,
+    size: node.size,
+    path: node.path,
+    is_dir: true,
+    children: [],
+    nodeRef: node
+  };
   
-  // Group everything after the top 7 largest into "Others"
-  const maxItems = 7;
-  let displayItems = children.slice(0, maxItems);
-  const otherItems = children.slice(maxItems);
-  
-  if (otherItems.length > 0) {
-    const otherSize = otherItems.reduce((sum, item) => sum + item.size, 0);
-    displayItems.push({
-      name: 'Others',
-      size: otherSize,
-      is_dir: false,
-      path: '',
-      isOthers: true
+  if (node.children) {
+    // Only process subfolders that consume at least 1% of this folder's size
+    const threshold = currentFolderNode.size * 0.01;
+    node.children.forEach(child => {
+      if (child.is_dir && child.size >= threshold) {
+        const childTree = buildTreeData(child, depth + 1, maxDepth);
+        if (childTree) {
+          treeNode.children.push(childTree);
+        }
+      }
     });
   }
   
-  displayItems.forEach((item, idx) => {
-    const percent = ((item.size / totalSize) * 100);
-    if (percent < 0.1) return; // Skip tiny segments
+  return treeNode;
+}
+
+// Global yCounter for tree node Y layouts
+let yCounter = 0;
+
+// Coordinate layout assignment for tree node positioning
+function assignCoordinates(node, depth) {
+  node.depth = depth;
+  node.x = 80 + depth * 220; // Column horizontal offset
+  
+  if (node.children && node.children.length > 0) {
+    node.children.forEach(child => assignCoordinates(child, depth + 1));
+    // Center parent vertically between first and last child midpoint
+    const firstChildY = node.children[0].y;
+    const lastChildY = node.children[node.children.length - 1].y;
+    node.y = (firstChildY + lastChildY) / 2;
+  } else {
+    // Assign sequential slot to leaf node
+    node.y = 50 + yCounter * 60;
+    yCounter++;
+  }
+}
+
+// Bezier path link coordinate helper
+function drawBezierLink(x1, y1, x2, y2) {
+  const midX = (x1 + x2) / 2;
+  return `M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2} ${y2}`;
+}
+
+// Draw links recursively in the SVG tree diagram
+function drawLinks(group, parentNode) {
+  if (!parentNode.children) return;
+  
+  parentNode.children.forEach(child => {
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', drawBezierLink(parentNode.x, parentNode.y, child.x, child.y));
+    path.setAttribute('class', 'tree-link');
+    path.setAttribute('id', `link-${parentNode.name}-${child.name}`.replace(/\s+/g, '-'));
+    group.appendChild(path);
     
-    const color = DIST_COLORS[idx % DIST_COLORS.length];
-    
-    // Create segment element
-    const seg = document.createElement('div');
-    seg.className = 'distribution-segment';
-    seg.style.width = `${percent}%`;
-    seg.style.backgroundColor = color;
-    seg.title = `${item.name}: ${formatBytes(item.size)} (${percent.toFixed(1)}%)`;
-    
-    // Click handler to navigate if it's a directory
-    if (item.is_dir) {
-      seg.addEventListener('click', () => {
-        navigateToFolder(item);
-      });
-    }
-    
-    // Hover handlers to highlight in legend
-    seg.addEventListener('mouseenter', () => {
-      highlightLegendItem(idx);
-    });
-    seg.addEventListener('mouseleave', () => {
-      clearLegendHighlights();
-    });
-    
-    bar.appendChild(seg);
-    
-    // Create legend item
-    const legItem = document.createElement('div');
-    legItem.className = 'dist-legend-item';
-    legItem.id = `dist-leg-${idx}`;
-    legItem.innerHTML = `
-      <div class="dist-legend-color" style="background-color: ${color}"></div>
-      <span class="dist-legend-name" title="${item.name}">${item.name}</span>
-      <span class="dist-legend-size">${formatBytes(item.size)}</span>
-      <span class="dist-legend-percent">${percent.toFixed(1)}%</span>
-    `;
-    
-    if (item.is_dir) {
-      legItem.addEventListener('click', () => {
-        navigateToFolder(item);
-      });
-    }
-    
-    // Hover legend item highlights segment in bar
-    legItem.addEventListener('mouseenter', () => {
-      seg.style.filter = 'brightness(1.25)';
-      seg.style.transform = 'scaleY(1.05)';
-      seg.style.boxShadow = '0 0 10px rgba(255, 255, 255, 0.15)';
-    });
-    legItem.addEventListener('mouseleave', () => {
-      seg.style.filter = '';
-      seg.style.transform = '';
-      seg.style.boxShadow = '';
-    });
-    
-    legend.appendChild(legItem);
+    // Recurse children
+    drawLinks(group, child);
   });
 }
 
-function highlightLegendItem(index) {
-  const items = document.querySelectorAll('.dist-legend-item');
-  items.forEach((item, idx) => {
-    if (idx === index) {
-      item.style.background = 'rgba(255, 255, 255, 0.08)';
-      item.style.borderColor = 'rgba(255, 255, 255, 0.15)';
-    } else {
-      item.style.opacity = '0.35';
+// Draw nodes recursively in the SVG tree diagram
+function drawNodes(group, node) {
+  const parentSize = currentFolderNode.size || 1;
+  // Node radius is proportional to the square root of size ratio (proportional circle area!)
+  const radius = 6 + Math.sqrt(node.size / parentSize) * 22;
+  
+  // Create group container for this node
+  const nodeG = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  group.appendChild(nodeG);
+  
+  // Draw Circle
+  const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  circle.setAttribute('cx', node.x.toString());
+  circle.setAttribute('cy', node.y.toString());
+  circle.setAttribute('r', radius.toString());
+  circle.setAttribute('class', 'tree-node-circle');
+  
+  // Tooltip
+  const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+  title.textContent = `${node.name}\nSize: ${formatBytes(node.size)}`;
+  circle.appendChild(title);
+  
+  // Click handler to drill down into folder
+  circle.addEventListener('click', () => {
+    navigateToFolder(node.nodeRef);
+  });
+  
+  // Hover handler to highlight path link
+  circle.addEventListener('mouseenter', () => {
+    // Highlight parent connection link
+    if (node.children) {
+      node.children.forEach(child => {
+        const link = document.getElementById(`link-${node.name}-${child.name}`.replace(/\s+/g, '-'));
+        if (link) link.classList.add('highlighted');
+      });
     }
   });
-}
-
-function clearLegendHighlights() {
-  const items = document.querySelectorAll('.dist-legend-item');
-  items.forEach(item => {
-    item.style.background = '';
-    item.style.borderColor = '';
-    item.style.opacity = '';
+  
+  circle.addEventListener('mouseleave', () => {
+    const links = group.querySelectorAll('.tree-link');
+    group.querySelectorAll('.tree-link').forEach(l => l.classList.remove('highlighted'));
   });
+  
+  nodeG.appendChild(circle);
+  
+  // Name Label
+  const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+  text.setAttribute('x', (node.x + radius + 8).toString());
+  text.setAttribute('y', (node.y + 4).toString());
+  text.setAttribute('class', 'tree-node-text');
+  text.textContent = node.name;
+  nodeG.appendChild(text);
+  
+  // Size Label (sub-caption)
+  const sizeText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+  sizeText.setAttribute('x', (node.x + radius + 8).toString());
+  sizeText.setAttribute('y', (node.y + 18).toString());
+  sizeText.setAttribute('class', 'tree-node-size');
+  sizeText.textContent = formatBytes(node.size);
+  nodeG.appendChild(sizeText);
+  
+  // Render children
+  if (node.children) {
+    node.children.forEach(child => drawNodes(group, child));
+  }
 }
