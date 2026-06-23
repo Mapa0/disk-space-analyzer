@@ -244,15 +244,20 @@ function exportDataForAgent() {
   const topFolders = getLargestFolders(scanData.tree, 15);
   const cacheSuggestions = scanData.cache_suggestions || [];
   
-  // Determine the exe path (best guess — the user can adjust)
+  // Determine the exe path and scan file path
   const exePath = 'DiskSpaceAnalyzer.exe';
   const guidePath = 'AI_GUIDE.md';
+  const scanFilename = getCurrentScanFilename();
+  // Build the full path using the page URL as a hint
+  const scanFilePath = `${window.location.origin}/${scanFilename}`;
   
   let md = `Baseado no repositório do github https://github.com/Mapa0/disk-space-analyzer, preciso realizar uma análise e limpeza de disco.\n\n`;
   
   // ── CLI Tools Section ──
   md += `## 🛠️ Ferramentas Disponíveis\n\n`;
   md += `Você tem acesso ao executável **Disk Space Analyzer** com modo CLI. Localize o \`${exePath}\` no sistema do usuário.\n\n`;
+  md += `- **Arquivo de scan atual:** \`${scanFilename}\` (localizado junto ao executável)\n`;
+  md += `- **Documentação completa para IA:** \`${guidePath}\` (junto ao executável)\n\n`;
   md += `### Comandos CLI disponíveis:\n`;
   md += `\`\`\`bash\n`;
   md += `# Listar scans disponíveis com metadados\n`;
@@ -262,19 +267,18 @@ function exportDataForAgent() {
   md += `# Escanear um diretório específico\n`;
   md += `"${exePath}" scan --path "C:\\\\Users" --output custom_scan.json\n\n`;
   md += `# Exportar análise completa formatada\n`;
-  md += `"${exePath}" export --scan ${getCurrentScanFilename()}\n\n`;
+  md += `"${exePath}" export --scan ${scanFilename}\n\n`;
   md += `# Comparar scan atual vs. anterior\n`;
-  md += `"${exePath}" compare --scan ${getCurrentScanFilename()}\n\n`;
+  md += `"${exePath}" compare --scan ${scanFilename}\n\n`;
   md += `# Ver caches detectados\n`;
   md += `"${exePath}" caches\n`;
   md += `\`\`\`\n\n`;
-  md += `📖 **Documentação completa:** Consulte o arquivo \`${guidePath}\` (localizado junto ao executável) para estratégias detalhadas de limpeza, comandos PowerShell avançados, e o workflow recomendado.\n\n`;
   md += `---\n\n`;
   
   // ── Scan Data Section ──
   md += `## 📊 Dados da Análise Atual\n\n`;
   md += `### Informações Gerais:\n`;
-  md += `- **Scan Utilizado:** \`${getCurrentScanFilename()}\`\n`;
+  md += `- **Scan Utilizado:** \`${scanFilename}\`\n`;
   md += `- **Diretório Raiz Escaneado:** \`${info.target_path}\`\n`;
   md += `- **Tamanho Total:** ${formatBytes(info.total_size)}\n`;
   md += `- **Total de Arquivos:** ${info.total_files.toLocaleString()}\n`;
@@ -324,18 +328,22 @@ function exportDataForAgent() {
   });
   md += `\n`;
   
-  // ── Agent Instructions ──
+  // ── Agent Instructions (safe-first strategy) ──
   md += `---\n\n`;
   md += `## 🤖 Instruções para o Agente de IA:\n\n`;
   md += `1. **Verifique a atualidade dos dados:** Se a data da varredura for antiga (>24h), rode um novo scan: \`"${exePath}" scan --all\`\n`;
-  md += `2. **Consulte a documentação:** Leia o arquivo \`${guidePath}\` (junto ao executável) para acessar estratégias de limpeza detalhadas, comandos PowerShell, e melhores práticas.\n`;
-  md += `3. **Análise de Risco:** Identifique quais itens podem ser limpos com segurança (caches, temps) vs. itens que precisam de confirmação do usuário.\n`;
-  md += `4. **Plano de Ação:** Crie um plano claro e categorizado de limpeza, estimando o espaço total que será liberado por categoria.\n`;
-  md += `5. **Execução Segura:** Use PowerShell para executar a limpeza. Sempre mostre o que será removido antes de executar.\n`;
+  md += `2. **Consulte a documentação:** Leia o arquivo \`${guidePath}\` (junto ao executável) para acessar estratégias detalhadas de limpeza, comandos PowerShell avançados, e melhores práticas.\n`;
+  md += `3. **FASE 1 — Limpeza Segura (execute imediatamente):** Limpe APENAS os itens 100% seguros listados acima (caches, temp files). Esses normalmente liberam pouco espaço mas são risco zero. Execute a limpeza e reporte quanto liberou.\n`;
+  md += `4. **FASE 2 — Análise de Oportunidades Grandes:** Após a limpeza segura, analise as maiores pastas e arquivos. Identifique os itens que oferecem **o maior ganho de espaço** (projetos antigos, backups, VMs, node_modules duplicados, downloads antigos, etc.). Para CADA item grande, explique:\n`;
+  md += `   - O que é e por que está ocupando espaço\n`;
+  md += `   - Quanto espaço seria liberado ao remover/limpar\n`;
+  md += `   - O risco envolvido (pode perder dados? é reversível?)\n`;
+  md += `   - **Peça confirmação explícita do usuário antes de executar qualquer ação grande.**\n`;
+  md += `5. **Execução Segura:** Use PowerShell. Sempre mostre o que será removido antes de executar. Use \`-WhatIf\` quando possível.\n`;
   md += `6. **Pós-Limpeza OBRIGATÓRIO:** Após qualquer limpeza, SEMPRE rode:\n`;
   md += `   \`\`\`bash\n   "${exePath}" scan --all\n   \`\`\`\n`;
-  md += `   Isso atualiza os dados do dashboard para que o usuário veja os resultados da limpeza visualmente.\n`;
-  md += `7. **Compare resultados:** Rode \`"${exePath}" compare --scan ${getCurrentScanFilename()}\` para mostrar exatamente quanto espaço foi liberado.\n`;
+  md += `   Isso atualiza os dados do dashboard para que o usuário veja os resultados visualmente.\n`;
+  md += `7. **Compare resultados:** Rode \`"${exePath}" compare --scan ${scanFilename}\` para mostrar exatamente quanto espaço foi liberado.\n`;
   
   // Copy to clipboard
   navigator.clipboard.writeText(md).then(() => {

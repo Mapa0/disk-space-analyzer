@@ -31,16 +31,22 @@ SCAN_FILES = {
 }
 
 
-def hide_console_window():
-    """Hide the console window when running in GUI mode on Windows."""
+def attach_parent_console():
+    """Attach to the parent process's console so CLI output works.
+    
+    Since the exe is built with console=False (no terminal window on double-click),
+    we need to explicitly attach to the calling terminal when run from cmd/powershell.
+    """
     try:
         kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
-        user32 = ctypes.WinDLL('user32', use_last_error=True)
-        hwnd = kernel32.GetConsoleWindow()
-        if hwnd:
-            user32.ShowWindow(hwnd, 0)  # SW_HIDE = 0
+        ATTACH_PARENT_PROCESS = ctypes.c_ulong(-1).value  # 0xFFFFFFFF
+        if kernel32.AttachConsole(ATTACH_PARENT_PROCESS):
+            sys.stdout = open('CONOUT$', 'w', encoding='utf-8')
+            sys.stderr = open('CONOUT$', 'w', encoding='utf-8')
+            return True
     except Exception:
         pass
+    return False
 
 
 def format_bytes(size_bytes, decimals=2):
@@ -79,7 +85,6 @@ def get_largest_folders(tree_node, limit=15):
 
 def cmd_gui():
     """Launch the GUI desktop application."""
-    hide_console_window()
 
     import webview
 
@@ -223,17 +228,22 @@ def cmd_export(args):
     guide_path = os.path.join(data_dir, "AI_GUIDE.md")
     if not os.path.exists(guide_path):
         guide_path = os.path.join(current_dir, "AI_GUIDE.md")
+    scan_filepath = os.path.abspath(filepath)
 
-    md = _build_agent_prompt(info, top_files, extensions, cache_suggestions, top_folders, exe_path, guide_path, scan_file, data)
+    md = _build_agent_prompt(info, top_files, extensions, cache_suggestions, top_folders, exe_path, guide_path, scan_file, data, scan_filepath)
     print(md)
 
 
-def _build_agent_prompt(info, top_files, extensions, cache_suggestions, top_folders, exe_path, guide_path, scan_file, full_data):
+def _build_agent_prompt(info, top_files, extensions, cache_suggestions, top_folders, exe_path, guide_path, scan_file, full_data, scan_filepath=""):
     """Build the comprehensive agent prompt markdown string."""
     md = ""
     md += f"Baseado no repositório do github https://github.com/Mapa0/disk-space-analyzer, preciso realizar uma análise e limpeza de disco.\n\n"
     md += f"## 🛠️ Ferramentas Disponíveis\n\n"
-    md += f"Você tem acesso ao executável **Disk Space Analyzer** com modo CLI. Caminho: `{exe_path}`\n\n"
+    md += f"Você tem acesso ao executável **Disk Space Analyzer** com modo CLI.\n\n"
+    md += f"- **Caminho do executável:** `{exe_path}`\n"
+    md += f"- **Arquivo de scan atual:** `{scan_filepath or scan_file}`\n"
+    md += f"- **Diretório dos scans:** `{data_dir}`\n"
+    md += f"- **Documentação completa para IA:** `{guide_path}`\n\n"
     md += f"### Comandos CLI disponíveis:\n"
     md += f"```bash\n"
     md += f"# Listar scans disponíveis\n"
@@ -249,12 +259,11 @@ def _build_agent_prompt(info, top_files, extensions, cache_suggestions, top_fold
     md += f"# Ver caches detectados\n"
     md += f"\"{exe_path}\" caches\n"
     md += f"```\n\n"
-    md += f"📖 **Documentação completa de uso para IA:** Consulte o arquivo `{guide_path}` para estratégias de limpeza, comandos PowerShell avançados, e workflow recomendado.\n\n"
     md += f"---\n\n"
 
     md += f"## 📊 Dados da Análise Atual\n\n"
     md += f"### Informações Gerais:\n"
-    md += f"- **Scan Utilizado:** `{scan_file}`\n"
+    md += f"- **Scan Utilizado:** `{scan_filepath or scan_file}`\n"
     md += f"- **Diretório Raiz Escaneado:** `{info.get('target_path', 'N/A')}`\n"
     md += f"- **Tamanho Total:** {format_bytes(info.get('total_size', 0))}\n"
     md += f"- **Total de Arquivos:** {info.get('total_files', 0):,}\n"
@@ -301,17 +310,21 @@ def _build_agent_prompt(info, top_files, extensions, cache_suggestions, top_fold
         md += f"- `{ext['ext']}`: {format_bytes(ext['size'])}\n"
     md += "\n"
 
-    # Instructions
+    # Instructions — safe-first strategy
     md += "---\n\n"
     md += "## 🤖 Instruções para o Agente de IA:\n\n"
     md += "1. **Verifique a atualidade dos dados:** Se a data da varredura for antiga (>24h), rode um novo scan: `\"" + str(exe_path) + "\" scan --all`\n"
-    md += "2. **Consulte a documentação:** Leia o arquivo `" + str(guide_path) + "` para acessar estratégias de limpeza detalhadas, comandos PowerShell, e melhores práticas.\n"
-    md += "3. **Análise de Risco:** Identifique quais itens podem ser limpos com segurança (caches, temps) vs. itens que precisam de confirmação do usuário.\n"
-    md += "4. **Plano de Ação:** Crie um plano claro e categorizado de limpeza, estimando o espaço total que será liberado.\n"
-    md += "5. **Execução Segura:** Use PowerShell para executar a limpeza. Sempre mostre o que será removido antes de executar.\n"
+    md += "2. **Consulte a documentação:** Leia o arquivo `" + str(guide_path) + "` para acessar estratégias detalhadas de limpeza, comandos PowerShell avançados, e melhores práticas.\n"
+    md += "3. **FASE 1 — Limpeza Segura (execute imediatamente):** Limpe APENAS os itens 100% seguros listados acima (caches, temp files). Esses normalmente liberam pouco espaço mas são risco zero. Execute a limpeza e reporte quanto liberou.\n"
+    md += "4. **FASE 2 — Análise de Oportunidades Grandes:** Após a limpeza segura, analise as maiores pastas e arquivos listados acima. Identifique os itens que oferecem **o maior ganho de espaço** (muitas vezes são projetos antigos, backups, VMs, node_modules duplicados, downloads antigos, etc.). Para CADA item grande, explique:\n"
+    md += "   - O que é e por que está ocupando espaço\n"
+    md += "   - Quanto espaço seria liberado ao remover/limpar\n"
+    md += "   - O risco envolvido (pode perder dados? é reversível?)\n"
+    md += "   - **Peça confirmação explícita do usuário antes de executar qualquer ação grande.**\n"
+    md += "5. **Execução Segura:** Use PowerShell. Sempre mostre o que será removido antes de executar. Use `-WhatIf` quando possível.\n"
     md += "6. **Pós-Limpeza OBRIGATÓRIO:** Após qualquer limpeza, SEMPRE rode:\n"
     md += f"   ```bash\n   \"{exe_path}\" scan --all\n   ```\n"
-    md += "   Isso atualiza os dados da aplicação GUI para que o usuário veja os resultados.\n"
+    md += "   Isso atualiza os dados do dashboard para que o usuário veja os resultados visualmente.\n"
     md += "7. **Compare resultados:** Rode `\"" + str(exe_path) + "\" compare --scan " + scan_file + "` para mostrar exatamente quanto espaço foi liberado.\n"
 
     return md
@@ -409,9 +422,13 @@ Examples:
     args = parser.parse_args()
 
     if args.command is None:
-        # No subcommand → launch GUI
+        # No subcommand → launch GUI (no console needed)
         cmd_gui()
-    elif args.command == "scan":
+    else:
+        # CLI mode → attach to parent terminal for output
+        attach_parent_console()
+
+    if args.command == "scan":
         cmd_scan(args)
     elif args.command == "list":
         cmd_list(args)
