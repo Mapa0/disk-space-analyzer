@@ -63,6 +63,16 @@ This registers a silent task that runs every **Sunday at 03:00 AM**.
 
 ---
 
+## 🤖 Agentic Interaction (AI Assistant Prompts)
+
+If you are using an AI coding assistant (like Gemini Antigravity), you can easily query your storage and manage cleanups by using these natural-language prompts:
+
+- **Check Storage Status & Growth:** *"Verifica o crescimento do disco"* (The AI will run `compare_scans.py` to compare today's data with the last weekly scan and highlight changes).
+- **Propose Cleanups:** *"Me ajuda a liberar espaço"* (The AI parses the growth report, checks for caches/duplicates, and proposes safe cleanup items).
+- **Run Manual Scan:** *"Roda uma nova varredura de disco"* (Updates all JSON configurations with the latest data).
+
+---
+
 ## 📦 Publishing to GitHub (Public Repo)
 
 Follow these steps to upload this project to your GitHub account:
